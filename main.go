@@ -95,17 +95,17 @@ func main() {
 // opts parses the command-line options.
 func opts() (options, error) {
 	e := func(msg string) error {
-		return fmt.Errorf(`Usage: alternate <server> <addresses> <overlap> <env>
-- server: path to the server to run. Example: /usr/bin/server
+		return fmt.Errorf(`Usage: alternate <server> <addresses> <overlap> [<env>]
+- server: path to the server binary to run. Example: /usr/bin/server
 - addresses: comma-separated list of addresses to pass as an argument to the server. Example: :3000,:3001
 - overlap: overlap duration between the two server instances. Example: 10s
-- env: comma-separated list of environment variables to forward. Example: VAR_1,VAR_2
+- env: optional comma-separated list of environment variable names to forward. Example: VAR_1,VAR_2
 %s`, msg)
 	}
 
 	o := options{}
 
-	if len(os.Args) < 5 {
+	if len(os.Args) < 4 {
 		return o, e("Missing arguments")
 	}
 
@@ -119,7 +119,9 @@ func opts() (options, error) {
 		o.overlap = overlap
 	}
 
-	o.env = getEnv(strings.Split(os.Args[4], ","))
+	if len(os.Args) >= 5 {
+		o.env = getEnv(strings.Split(os.Args[4], ","))
+	}
 
 	return o, nil
 }
