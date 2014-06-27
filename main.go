@@ -25,7 +25,7 @@ type options struct {
 }
 
 func main() {
-	log.SetPrefix("alt      | ")
+	log.SetPrefix("alternate | ")
 
 	o, err := opts()
 	if err != nil {
