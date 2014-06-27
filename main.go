@@ -13,7 +13,8 @@ import (
 )
 
 const (
-	sign = syscall.SIGUSR2
+	inSign  = syscall.SIGUSR2
+	outSign = syscall.SIGINT
 )
 
 type options struct {
@@ -35,8 +36,8 @@ func main() {
 	log.Printf("Options:\n- Server: %s\n- Addresses: %s\n- Overlap: %v\n- Env: %s\n",
 		o.server, strings.Join(o.addresses, " "), o.overlap, strings.Join(o.env, " "))
 
-	ch := make(chan os.Signal)
-	signal.Notify(ch, sign)
+	rcv := make(chan os.Signal)
+	signal.Notify(rcv, inSign)
 
 	address := ""
 	concurrent := 0
@@ -77,14 +78,15 @@ func main() {
 			run(cmd)
 		}(address)
 
-		log.Printf("Waiting for signal '%v'\n", sign)
-		<-ch
+		log.Printf("Waiting for signal '%v'\n", inSign)
+		<-rcv
 		for concurrent >= max {
-			log.Printf("Ignoring signal '%v', %d server instances already running\n", sign, concurrent)
-			<-ch
+			log.Printf("Ignoring signal '%v', %d server instances already running\n", inSign, concurrent)
+			<-rcv
 		}
 
-		go forward(cmd, o.overlap, sign)
+		log.Printf("Received signal '%v'\n", inSign)
+		go send(cmd, o.overlap, outSign)
 
 		prevCmd = cmd
 	}
@@ -132,16 +134,16 @@ func getEnv(keys []string) []string {
 	return env
 }
 
-// forward forwards the signal to the process of the given command once the delay is reached.
-func forward(cmd *exec.Cmd, delay time.Duration, sign os.Signal) {
+// send sends a signal to the command process once the delay is reached.
+func send(cmd *exec.Cmd, delay time.Duration, sign os.Signal) {
 	address := cmd.Args[1]
 
-	log.Printf("Received signal '%v', will forward to server instance at address %s after %vs\n",
+	log.Printf("Will send signal '%v' to server instance at address %s after %vs\n",
 		sign, address, delay.Seconds())
 
 	time.Sleep(delay)
 
-	log.Printf("Forwarding signal '%v' to server instance at address %s\n", sign, address)
+	log.Printf("Sending signal '%v' to server instance at address %s\n", sign, address)
 	cmd.Process.Signal(sign)
 }
 
