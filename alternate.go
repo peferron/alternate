@@ -1,7 +1,6 @@
 package main
 
 import (
-	"fmt"
 	"io"
 	"log"
 	"os"
@@ -9,183 +8,73 @@ import (
 	"os/signal"
 	"strings"
 	"syscall"
-	"time"
 )
 
-const (
-	inSign  = syscall.SIGUSR2
-	outSign = syscall.SIGINT
-)
+// Channel that receives USR2 to exit alternate. Used for testing only, otherwise it's nil.
+var usr2 chan os.Signal
 
-type options struct {
-	server    string
-	addresses []string
-	overlap   time.Duration
-	env       []string
-}
-
-func main() {
+func alternate(a arguments, stderr, cmdStdout, cmdStderr io.Writer) {
 	log.SetPrefix("alternate | ")
+	log.SetOutput(stderr)
+	log.SetFlags(0)
 
-	o, err := opts()
-	if err != nil {
-		log.Println(err.Error())
-		os.Exit(1)
-	}
+	log.Printf("Starting with command = '%s', values = %v, overlap = %vs\n",
+		a.command, a.values, a.overlap.Seconds())
 
-	log.Printf("Options:\n- Server: %s\n- Addresses: %s\n- Overlap: %v\n- Env: %s\n",
-		o.server, strings.Join(o.addresses, " "), o.overlap, strings.Join(o.env, " "))
+	// Channel that receives SIGUSR1 to execute the next command.
+	usr1 := make(chan os.Signal, 1)
+	signal.Notify(usr1, syscall.SIGUSR1)
+	// Get the loop started.
+	usr1 <- syscall.SIGUSR1
 
-	rcv := make(chan os.Signal)
-	signal.Notify(rcv, inSign)
+	// Channel that receives command exits.
+	cmdExit := make(chan int, 1)
 
-	address := ""
-	concurrent := 0
-	max := len(o.addresses)
-
-	var cmd *exec.Cmd
-	var prevCmd *exec.Cmd
-
-	term := make(chan os.Signal)
-	signal.Notify(term, syscall.SIGTERM)
-	go func() {
-		<-term
-		log.Printf("Received signal '%v', exiting now\n", syscall.SIGTERM)
-		if cmd != nil {
-			cmd.Process.Kill()
-		}
-		if prevCmd != nil {
-			prevCmd.Process.Kill()
-		}
-		os.Exit(0)
-	}()
+	l := len(a.values)
+	i := 0
+	cmds := make([]*exec.Cmd, l)
 
 	for {
-		address = nextAddress(o.addresses, address)
-		cmd = exec.Command(o.server, address)
-		cmd.Env = o.env
-
-		go func(address string) {
-			log.Printf("Starting new server instance at address %s, %d currently running\n",
-				address, concurrent)
-
-			defer func() {
-				log.Printf("Server instance at address %s exited", address)
-				concurrent--
-			}()
-			concurrent++
-
-			run(cmd)
-		}(address)
-
-		log.Printf("Waiting for signal '%v'\n", inSign)
-		<-rcv
-		for concurrent >= max {
-			log.Printf("Ignoring signal '%v', %d server instances already running\n", inSign, concurrent)
-			<-rcv
-		}
-
-		log.Printf("Received signal '%v'\n", inSign)
-		go send(cmd, o.overlap, outSign)
-
-		prevCmd = cmd
-	}
-}
-
-// opts parses the command-line options.
-func opts() (options, error) {
-	e := func(msg string) error {
-		return fmt.Errorf(`Usage: alternate <server> <addresses> <overlap> [<env>]
-- server: path to the server binary to run. Example: /usr/bin/server
-- addresses: comma-separated list of addresses to pass as an argument to the server. Example: :3000,:3001
-- overlap: overlap duration between the two server instances. Example: 10s
-- env: optional comma-separated list of environment variable names to forward. Example: VAR_1,VAR_2
-%s`, msg)
-	}
-
-	o := options{}
-
-	if len(os.Args) < 4 {
-		return o, e("Missing arguments")
-	}
-
-	o.server = os.Args[1]
-
-	o.addresses = strings.Split(os.Args[2], ",")
-
-	if overlap, err := time.ParseDuration(os.Args[3]); err != nil {
-		return o, e(fmt.Sprintf("Invalid overlap: %s", os.Args[3]))
-	} else {
-		o.overlap = overlap
-	}
-
-	if len(os.Args) >= 5 {
-		o.env = getEnv(strings.Split(os.Args[4], ","))
-	}
-
-	return o, nil
-}
-
-// getEnv builds the list of environment variables with their values.
-func getEnv(keys []string) []string {
-	env := []string{}
-	for _, k := range keys {
-		v := os.Getenv(k)
-		env = append(env, fmt.Sprintf("%s=%s", k, v))
-	}
-	return env
-}
-
-// send sends a signal to the command process once the delay is reached.
-func send(cmd *exec.Cmd, delay time.Duration, sign os.Signal) {
-	address := cmd.Args[1]
-
-	log.Printf("Will send signal '%v' to server instance at address %s after %vs\n",
-		sign, address, delay.Seconds())
-
-	time.Sleep(delay)
-
-	log.Printf("Sending signal '%v' to server instance at address %s\n", sign, address)
-	cmd.Process.Signal(sign)
-}
-
-// Run executes the given command and copies its stdout and stderr.
-func run(cmd *exec.Cmd) {
-	stdout, err := cmd.StdoutPipe()
-	if err != nil {
-		panic(err)
-	}
-	stderr, err := cmd.StderrPipe()
-	if err != nil {
-		panic(err)
-	}
-
-	err = cmd.Start()
-	if err != nil {
-		panic(err)
-	}
-
-	go io.Copy(os.Stdout, stdout)
-	go io.Copy(os.Stderr, stderr)
-
-	cmd.Wait()
-}
-
-// nextAddress returns the next address that should be used for listening.
-func nextAddress(addresses []string, address string) string {
-	i := indexOf(addresses, address) + 1
-	if i >= len(addresses) {
-		i = 0
-	}
-	return addresses[i]
-}
-
-// indexOf returns the index of the given value in the given slice, or -1 if it cannot be found.
-func indexOf(slice []string, value string) int {
-	for p, v := range slice {
-		if v == value {
-			return p
+		select {
+		case <-usr2:
+			log.Println("Received USR2")
+			return
+		case <-usr1:
+			log.Println("Received USR1")
+			if cmds[i] != nil {
+				log.Printf("Command %d still running, cannot run again\n", i)
+				break
+			}
+			c := command(a, i, cmdStdout, cmdStderr)
+			cmds[i] = c
+			go run(c, cmdExit, i)
+			i = rotate(i, l)
+		case j := <-cmdExit:
+			log.Printf("Command #%d exited\n", j)
+			cmds[j] = nil
 		}
 	}
-	return -1
+}
+
+func command(a arguments, i int, stdout, stderr io.Writer) *exec.Cmd {
+	s := strings.Replace(a.command, "%alternate", a.values[i], 1)
+
+	c := exec.Command("sh", "-c", s)
+	c.Stdout = stdout
+	c.Stderr = stderr
+
+	return c
+}
+
+func run(c *exec.Cmd, exit chan int, i int) {
+	log.Printf("Running command #%d\n", i)
+	c.Run()
+	exit <- i
+}
+
+func rotate(i, l int) int {
+	if i < l-1 {
+		return i + 1
+	}
+	return 0
 }
