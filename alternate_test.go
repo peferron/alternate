@@ -215,9 +215,9 @@ func TestConflict(t *testing.T) {
 	exitAlternate()
 }
 
-func testbinPath() string {
-	if savedTestbinPath != "" {
-		return savedTestbinPath
+func binPath() string {
+	if savedBinPath != "" {
+		return savedBinPath
 	}
 
 	dir := os.TempDir()
