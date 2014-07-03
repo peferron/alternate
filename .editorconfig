@@ -15,3 +15,6 @@ trim_trailing_whitespace = false
 
 [*.go]
 indent_style = tab
+
+[{package.json}]
+indent_size = 2
