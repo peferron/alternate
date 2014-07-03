@@ -1,0 +1,29 @@
+{
+  "name": "alternate",
+  "version": "0.1.0",
+  "description": "Run a server on alternating ports.",
+  "main": "Gruntfile.js",
+  "dependencies": {
+    "grunt": "^0.4.5",
+    "grunt-shell-spawn": "^0.3.0",
+    "load-grunt-config": "^0.10.0"
+  },
+  "devDependencies": {
+    "grunt-contrib-watch": "^0.6.1",
+    "grunt-shell-spawn": "^0.3.0",
+    "load-grunt-config": "^0.10.0"
+  },
+  "scripts": {
+    "test": "go test github.com/peferron/alternate/..."
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/peferron/alternate.git"
+  },
+  "author": "pe.ferron@gmail.com",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/peferron/alternate/issues"
+  },
+  "homepage": "https://github.com/peferron/alternate"
+}
