@@ -6,7 +6,6 @@ import (
 	"os"
 	"os/signal"
 	"strings"
-	"syscall"
 	"time"
 
 	"github.com/peferron/alternate/testbin"
@@ -56,7 +55,7 @@ func exitAfterStart(delay time.Duration, exit chan struct{}) {
 
 func exitAfterSigint(delay time.Duration, exit chan struct{}) {
 	sigint := make(chan os.Signal)
-	signal.Notify(sigint, syscall.SIGINT)
+	signal.Notify(sigint, os.Interrupt)
 	for _ = range sigint {
 		if delay >= 0 {
 			time.Sleep(delay)
