@@ -14,7 +14,7 @@
     "load-grunt-config": "^0.10.0"
   },
   "scripts": {
-    "test": "go test github.com/peferron/alternate/..."
+    "test": "go test github.com/peferron/alternate"
   },
   "repository": {
     "type": "git",

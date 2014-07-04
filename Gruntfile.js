@@ -15,7 +15,7 @@ module.exports = function (grunt) {
         },
         shell: {
             test: {
-                command: 'go test -v github.com/peferron/alternate/...'
+                command: 'go test -v github.com/peferron/alternate'
             },
             install: {
                 command: 'go install github.com/peferron/alternate'
