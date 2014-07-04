@@ -11,52 +11,72 @@ import (
 	"time"
 )
 
-// Channel that receives USR2 to exit alternate. Used for testing only, otherwise it's nil.
-var usr2 chan os.Signal
+// exit is a channel that is used during testing only, to return from the alternate function.
+var exit chan struct{}
 
-func alternate(a arguments, stderr, cmdStdout, cmdStderr io.Writer) {
+// alternate runs a command with alternating values inserted in place of the placeholder. Each time
+// a SIGUSR1 is received, a new command is run with the next value, and the previous command is sent
+// a SIGINT after the overlap duration has elapsed. The alternate logs are written to stderr, and
+// the command logs are written to cmdStdout and cmdStderr;
+func alternate(command string, placeholder string, values []string, overlap time.Duration,
+	stderr, cmdStdout, cmdStderr io.Writer) {
+
 	log.SetPrefix("alternate | ")
 	log.SetOutput(stderr)
 	log.SetFlags(0)
 
-	log.Printf("Starting with command = '%s', values = %v, overlap = %vs\n",
-		a.command, a.values, a.overlap.Seconds())
+	log.Printf("Starting with command = '%s', placeholder '%s', values = %v, overlap = %vs\n",
+		command, placeholder, values, overlap.Seconds())
 
-	// Channel that receives SIGUSR1 to execute the next command.
-	usr1 := make(chan os.Signal, 1)
-	signal.Notify(usr1, syscall.SIGUSR1)
-	// Get the loop started.
-	usr1 <- syscall.SIGUSR1
+	// next receives a signal when the next command should be run.
+	next := make(chan os.Signal, 1)
+	signal.Notify(next, syscall.SIGUSR1)
+	// Run the first command.
+	next <- syscall.Signal(0)
 
-	// Channel that receives command exits.
-	cmdExit := make(chan string, 1)
+	// overlapEnd receives an empty struct when the overlap duration has elapsed.
+	overlapEnd := make(chan struct{})
 
-	overlap := make(chan struct{}, 1)
+	// cmdExit receives the value associated with a command when the command exits.
+	cmdExit := make(chan string)
 
-	l := len(a.values)
-	i := -1
-
+	// cmds maps values to their running commands.
 	cmds := map[string]*exec.Cmd{}
+
+	// i is the index of the currently running command. It increases by 1 every time alternate
+	// successfully moves to the next value.
+	i := -1
 
 	for {
 		select {
-		case <-usr2:
-			log.Println("Received USR2, exiting")
+		case <-exit:
+			log.Println("Exit channel triggered, exiting")
 			return
 
-		case <-usr1:
-			log.Println("Received USR1")
+		case value := <-cmdExit:
+			log.Printf("Command with value '%s' exited\n", value)
+			delete(cmds, value)
+			if len(cmds) == 0 {
+				log.Println("No running commands, exiting")
+				return
+			}
 
-			// Can the next command be run?
-			nextValue := a.values[(i+1)%l]
+		case signal := <-next:
+			l := len(values)
+			nextValue := values[(i+1)%l]
+
+			if signal == syscall.SIGUSR1 {
+				log.Printf("Received USR1, trying to move to next value: '%s'", nextValue)
+			}
+
 			if _, ok := cmds[nextValue]; ok {
 				log.Printf("Command with value '%s' still running, cannot run again\n", nextValue)
 				break
 			}
-			s := strings.Replace(a.command, "%alt", nextValue, 1)
-			nextCmd := command(s, cmdStdout, cmdStderr)
-			cmds[nextValue] = nextCmd
 
+			s := strings.Replace(command, placeholder, nextValue, 1)
+			nextCmd := cmd(s, cmdStdout, cmdStderr)
+			cmds[nextValue] = nextCmd
 			if err := run(nextCmd, cmdExit, nextValue); err != nil {
 				log.Printf("Command with value '%s' failed to run, error: '%s'\n", err.Error())
 				delete(cmds, nextValue)
@@ -68,52 +88,51 @@ func alternate(a arguments, stderr, cmdStdout, cmdStderr io.Writer) {
 				break
 			}
 
-			if a.overlap > 0 {
-				// If the next command is still running after the overlap, send SIGINT to the
-				// current command.
-				go func() {
-					time.Sleep(a.overlap)
-					overlap <- struct{}{}
-				}()
+			if overlap == 0 {
+				if interruptCurrentCmd(cmds, values, i) {
+					i++
+				}
 			} else {
-				// Send SIGINT to the current command right now.
-				currentValue := a.values[i%l]
-				if currentCmd, ok := cmds[currentValue]; ok {
-					if p := currentCmd.Process; p != nil {
-						log.Printf("Sending immediate SIGINT to command with value '%s'",
-							currentValue)
-						p.Signal(os.Interrupt)
-						i++
-					}
-				}
+				go func() {
+					time.Sleep(overlap)
+					overlapEnd <- struct{}{}
+				}()
 			}
 
-		case <-overlap:
-			nextValue := a.values[(i+1)%l]
-			if _, ok := cmds[nextValue]; ok {
-				currentValue := a.values[i%l]
-				if currentCmd, ok := cmds[currentValue]; ok {
-					if p := currentCmd.Process; p != nil {
-						log.Printf("Overlap finished, sending SIGINT to command with value '%s'",
-							currentValue)
-						p.Signal(os.Interrupt)
-						i++
-					}
-				}
-			}
-
-		case v := <-cmdExit:
-			log.Printf("Command with value '%s' exited\n", v)
-			delete(cmds, v)
-			if len(cmds) == 0 {
-				log.Println("No command running anymore, exiting")
-				return
+		case <-overlapEnd:
+			if interruptCurrentCmd(cmds, values, i) {
+				i++
 			}
 		}
 	}
 }
 
-func command(s string, stdout, stderr io.Writer) *exec.Cmd {
+func interruptCurrentCmd(cmds map[string]*exec.Cmd, values []string, i int) bool {
+	l := len(values)
+	nextValue := values[(i+1)%l]
+	if _, ok := cmds[nextValue]; !ok {
+		// The next command exited prematurely
+		return false
+	}
+
+	currentValue := values[i%l]
+	currentCmd, ok := cmds[currentValue]
+	if !ok {
+		return false
+	}
+
+	p := currentCmd.Process
+	if p == nil {
+		return false
+	}
+
+	log.Printf("Overlap finished, sending SIGINT to command with value '%s'",
+		currentValue)
+	p.Signal(os.Interrupt)
+	return true
+}
+
+func cmd(s string, stdout, stderr io.Writer) *exec.Cmd {
 	c := exec.Command("sh", "-c", s)
 	c.Stdout = stdout
 	c.Stderr = stderr

@@ -15,7 +15,7 @@ import (
 
 const (
 	zero  time.Duration = 0
-	one                 = 100 * time.Millisecond
+	one                 = 10 * time.Millisecond
 	two                 = 2 * one
 	three               = 3 * one
 )
@@ -152,6 +152,11 @@ func clone(a []string) []string {
 	return b
 }
 
+func init() {
+	fmt.Println("initializing exit")
+	exit = make(chan struct{})
+}
+
 func start(t *testing.T, values []string, overlap time.Duration) *test {
 	test := &test{
 		t,
@@ -160,9 +165,8 @@ func start(t *testing.T, values []string, overlap time.Duration) *test {
 		values,
 		0,
 	}
-	c := testbin.Path() + " %alt"
-	a := arguments{c, values, overlap}
-	go alternate(a, newNilWriter(), test.cmdStdout, test.cmdStderr)
+	c := testbin.Path() + " " + placeholder
+	go alternate(c, placeholder, values, overlap, newNilWriter(), test.cmdStdout, test.cmdStderr)
 	return test
 }
 
@@ -171,7 +175,7 @@ func sendUsr1() {
 }
 
 func stop() {
-	process().Signal(syscall.SIGUSR2)
+	exit <- struct{}{}
 	time.Sleep(one)
 }
 
@@ -387,7 +391,7 @@ func TestOverlapConflict(t *testing.T) {
 	}
 }
 
-func TestPrematureExit(t *testing.T) {
+func TestPrematureCmdExit(t *testing.T) {
 	valueSets := [][]string{
 		{"val0", "val1"},
 		{"val0", "val1", "val0"},
@@ -426,18 +430,16 @@ func TestPrematureExit(t *testing.T) {
 	}
 }
 
-func TestExit(t *testing.T) {
+func TestAlternateExit(t *testing.T) {
+	c := testbin.Path() + " " + placeholder
 	v := []string{"val0"}
 	o := zero
 
 	testbin.SetBehavior(two, zero, "a")
 
-	c := testbin.Path() + " %alt"
-	a := arguments{c, v, o}
-
 	exited := false
 	go func() {
-		alternate(a, newNilWriter(), newNilWriter(), newNilWriter())
+		alternate(c, placeholder, v, o, newNilWriter(), newNilWriter(), newNilWriter())
 		exited = true
 	}()
 
