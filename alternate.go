@@ -8,6 +8,7 @@ import (
 	"os/signal"
 	"strings"
 	"syscall"
+	"time"
 )
 
 // Channel that receives USR2 to exit alternate. Used for testing only, otherwise it's nil.
@@ -28,53 +29,105 @@ func alternate(a arguments, stderr, cmdStdout, cmdStderr io.Writer) {
 	usr1 <- syscall.SIGUSR1
 
 	// Channel that receives command exits.
-	cmdExit := make(chan int, 1)
+	cmdExit := make(chan string, 1)
+
+	overlap := make(chan struct{}, 1)
 
 	l := len(a.values)
-	i := 0
-	cmds := make([]*exec.Cmd, l)
+	i := -1
+
+	cmds := map[string]*exec.Cmd{}
 
 	for {
 		select {
 		case <-usr2:
-			log.Println("Received USR2")
+			log.Println("Received USR2, exiting")
 			return
+
 		case <-usr1:
 			log.Println("Received USR1")
-			if cmds[i] != nil {
-				log.Printf("Command %d still running, cannot run again\n", i)
+
+			// Can the next command be run?
+			nextValue := a.values[(i+1)%l]
+			if _, ok := cmds[nextValue]; ok {
+				log.Printf("Command with value '%s' still running, cannot run again\n", nextValue)
 				break
 			}
-			c := command(a, i, cmdStdout, cmdStderr)
-			cmds[i] = c
-			go run(c, cmdExit, i)
-			i = rotate(i, l)
-		case j := <-cmdExit:
-			log.Printf("Command #%d exited\n", j)
-			cmds[j] = nil
+			s := strings.Replace(a.command, "%alt", nextValue, 1)
+			nextCmd := command(s, cmdStdout, cmdStderr)
+			cmds[nextValue] = nextCmd
+
+			if err := run(nextCmd, cmdExit, nextValue); err != nil {
+				log.Printf("Command with value '%s' failed to run, error: '%s'\n", err.Error())
+				delete(cmds, nextValue)
+				break
+			}
+
+			if i < 0 {
+				i++
+				break
+			}
+
+			if a.overlap > 0 {
+				// If the next command is still running after the overlap, send SIGINT to the
+				// current command.
+				go func() {
+					time.Sleep(a.overlap)
+					overlap <- struct{}{}
+				}()
+			} else {
+				// Send SIGINT to the current command right now.
+				currentValue := a.values[i%l]
+				if currentCmd, ok := cmds[currentValue]; ok {
+					if p := currentCmd.Process; p != nil {
+						log.Printf("Sending immediate SIGINT to command with value '%s'",
+							currentValue)
+						p.Signal(os.Interrupt)
+						i++
+					}
+				}
+			}
+
+		case <-overlap:
+			nextValue := a.values[(i+1)%l]
+			if _, ok := cmds[nextValue]; ok {
+				currentValue := a.values[i%l]
+				if currentCmd, ok := cmds[currentValue]; ok {
+					if p := currentCmd.Process; p != nil {
+						log.Printf("Overlap finished, sending SIGINT to command with value '%s'",
+							currentValue)
+						p.Signal(os.Interrupt)
+						i++
+					}
+				}
+			}
+
+		case v := <-cmdExit:
+			log.Printf("Command with value '%s' exited\n", v)
+			delete(cmds, v)
+			if len(cmds) == 0 {
+				log.Println("No command running anymore, exiting")
+				return
+			}
 		}
 	}
 }
 
-func command(a arguments, i int, stdout, stderr io.Writer) *exec.Cmd {
-	s := strings.Replace(a.command, "%alternate", a.values[i], 1)
-
+func command(s string, stdout, stderr io.Writer) *exec.Cmd {
 	c := exec.Command("sh", "-c", s)
 	c.Stdout = stdout
 	c.Stderr = stderr
-
 	return c
 }
 
-func run(c *exec.Cmd, exit chan int, i int) {
-	log.Printf("Running command #%d\n", i)
-	c.Run()
-	exit <- i
-}
-
-func rotate(i, l int) int {
-	if i < l-1 {
-		return i + 1
+func run(c *exec.Cmd, exit chan string, v string) error {
+	log.Printf("Running command with value '%s'\n", v)
+	if err := c.Start(); err != nil {
+		return err
 	}
-	return 0
+	go func() {
+		c.Wait()
+		exit <- v
+	}()
+	return nil
 }

@@ -11,7 +11,7 @@ import (
 const (
 	usage = `Usage: alternate <command> <values> <overlap>
 
-- command: command to run, with %alternate used a a placeholder for the rotated values. Example: /usr/bin/server 127.0.0.1:%alternate
+- command: command to run, with %alt used a a placeholder for the rotated values. Example: /usr/bin/server 127.0.0.1:%alt
 - values: space-separated list of values to rotate through. Example: 3000 3001
 - overlap: delay between starting the next command and sending SIGINT to the previous one. Example: 10s`
 )
@@ -50,7 +50,7 @@ func args(a []string) (arguments, error) {
 
 	overlapStr := a[l-1]
 	overlap, err := time.ParseDuration(overlapStr)
-	if err != nil {
+	if err != nil || overlap < 0 {
 		return arguments{}, fmt.Errorf("Invalid overlap: %s", os.Args[3])
 	}
 

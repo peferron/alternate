@@ -2,12 +2,10 @@ package main
 
 import (
 	"fmt"
-	"io"
 	"os"
-	"os/exec"
-	"os/signal"
-	"path"
+	"sort"
 	"strings"
+	"sync"
 	"syscall"
 	"testing"
 	"time"
@@ -15,12 +13,12 @@ import (
 	"github.com/peferron/alternate/testbin"
 )
 
-var savedTestbinPath = ""
-
-func init() {
-	usr2 = make(chan os.Signal)
-	signal.Notify(usr2, syscall.SIGUSR2)
-}
+const (
+	zero  time.Duration = 0
+	one                 = 100 * time.Millisecond
+	two                 = 2 * one
+	three               = 3 * one
+)
 
 func newNilWriter() *nilWriter {
 	return &nilWriter{}
@@ -32,29 +30,37 @@ func (w *nilWriter) Write(p []byte) (n int, err error) {
 	return len(p), nil
 }
 
-func newSearchWriter(s string) *searchWriter {
-	return &searchWriter{strings.TrimRight(s, "\n"), "", false}
-}
-
-type searchWriter struct {
-	search string
-	buf    string
-	found  bool
-}
-
-func (w *searchWriter) Write(p []byte) (n int, err error) {
-	n = len(p)
-
-	if w.found {
-		return
+func newLineWriter(log bool) *lineWriter {
+	return &lineWriter{
+		"",
+		[]string{},
+		&sync.Mutex{},
+		log,
 	}
+}
+
+type lineWriter struct {
+	buf   string
+	lines []string
+	mutex *sync.Mutex
+	log   bool
+}
+
+func (w *lineWriter) Write(p []byte) (n int, err error) {
+	w.mutex.Lock()
+	defer w.mutex.Unlock()
+
+	n = len(p)
 
 	w.buf += string(p)
 	a := strings.Split(w.buf, "\n")
-	for _, v := range a {
-		if v == w.search {
-			w.found = true
-			return
+	for _, s := range a {
+		if s == "" {
+			continue
+		}
+		w.lines = append(w.lines, s)
+		if w.log {
+			fmt.Printf("LineWriter received: '%s'\n", s)
 		}
 	}
 	w.buf = a[len(a)-1]
@@ -62,197 +68,386 @@ func (w *searchWriter) Write(p []byte) (n int, err error) {
 	return
 }
 
-func (w *searchWriter) reset(s string) {
-	w.search = strings.TrimRight(s, "\n")
+func (w *lineWriter) reset() {
+	w.mutex.Lock()
+	defer w.mutex.Unlock()
+
 	w.buf = ""
-	w.found = false
+	w.lines = []string{}
 }
 
-func TestSearchWriter(t *testing.T) {
-	type op struct {
-		reset string
-		write string
-		found bool
-	}
+func (w *lineWriter) getLines() []string {
+	w.mutex.Lock()
+	defer w.mutex.Unlock()
 
+	clone := make([]string, len(w.lines))
+	for i, s := range w.lines {
+		clone[i] = s
+	}
+	return clone
+}
+
+type test struct {
+	t           *testing.T
+	cmdStdout   *lineWriter
+	cmdStderr   *lineWriter
+	values      []string
+	expectIndex int
+}
+
+func (test *test) reset() {
+	test.cmdStdout.reset()
+	test.cmdStderr.reset()
+}
+
+func (test *test) expect(d time.Duration, lines []string) {
+	expectIndex := test.expectIndex
+	test.expectIndex++
+
+	time.Sleep(d)
+
+	stdoutLines := test.cmdStdout.getLines()
+	if !sameStrings(lines, stdoutLines) {
+		fmt.Printf("For values %v expect #%d, within %v expected lines %v in stdout, was %v\n",
+			test.values, expectIndex, d, lines, stdoutLines)
+		test.t.Errorf("For values %v expect #%d, within %v expected lines %v in stdout, was %v",
+			test.values, expectIndex, d, lines, stdoutLines)
+	}
+	stderrLines := test.cmdStderr.getLines()
+	if !sameStrings(lines, stderrLines) {
+		fmt.Printf("For values %v expect #%d, within %v expected lines %v in stderr, was %v\n",
+			test.values, expectIndex, d, lines, stderrLines)
+		test.t.Errorf("For values %v expect #%d, within %v expected lines %v in stderr, was %v",
+			test.values, expectIndex, d, lines, stderrLines)
+	}
+}
+
+// sameStrings makes an unordered comparison of two slices of strings, and returns true if they
+// contain the same strings, or false otherwise.
+func sameStrings(a []string, b []string) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	if len(a) == 0 {
+		return true
+	}
+	aa := clone(a)
+	bb := clone(b)
+	sort.Strings(aa)
+	sort.Strings(bb)
+	for i := range aa {
+		if aa[i] != bb[i] {
+			return false
+		}
+	}
+	return true
+}
+
+// clone returns a deep copy of a slice of strings.
+func clone(a []string) []string {
+	b := make([]string, len(a))
+	for i := range a {
+		b[i] = a[i]
+	}
+	return b
+}
+
+func start(t *testing.T, values []string, overlap time.Duration) *test {
+	test := &test{
+		t,
+		newLineWriter(false),
+		newLineWriter(false),
+		values,
+		0,
+	}
+	c := testbin.Path() + " %alt"
+	a := arguments{c, values, overlap}
+	go alternate(a, newNilWriter(), test.cmdStdout, test.cmdStderr)
+	return test
+}
+
+func sendUsr1() {
+	process().Signal(syscall.SIGUSR1)
+}
+
+func stop() {
+	process().Signal(syscall.SIGUSR2)
+	time.Sleep(one)
+}
+
+func process() *os.Process {
+	p, err := os.FindProcess(os.Getpid())
+	if err != nil {
+		panic(err)
+	}
+	return p
+}
+
+func TestSameStrings(t *testing.T) {
 	tests := []struct {
-		search string
-		ops    []op
+		a    []string
+		b    []string
+		same bool
 	}{
-		{"hit", []op{
-			{"", "miss\n", false},
-		}},
-		{"hit", []op{
-			{"", "hit\n", true},
-		}},
-		{"hit\n", []op{
-			{"", "hit\n", true},
-		}},
-		{"hit", []op{
-			{"", "miss\nhit\n", true},
-		}},
-		{"hit", []op{
-			{"", "hit\nmiss\n", true},
-		}},
-		{"hit", []op{
-			{"", "miss\nhit\nmiss\n", true},
-		}},
-		{"hit", []op{
-			{"", "hit\n", true},
-			{"", "miss\n", true},
-			{"hit2", "", false},
-			{"", "hit\n", false},
-			{"", "hit2\n", true},
-		}},
+		{[]string{"a", "b"}, []string{"a", "b"}, true},
+		{[]string{"b", "a"}, []string{"a", "b"}, true},
+		{[]string{"a", "b", "c"}, []string{"a", "b"}, false},
 	}
 
-	for i, test := range tests {
-		writer := newSearchWriter(test.search)
-		for j, o := range test.ops {
-			if o.reset != "" {
-				writer.reset(o.reset)
-				continue
-			}
-
-			writer.Write([]byte(o.write))
-			found := writer.found
-			if o.found != found {
-				t.Errorf("In test %d op %d, expected found to be %t, was %t",
-					i, j, o.found, found)
-			}
+	for _, test := range tests {
+		same := sameStrings(test.a, test.b)
+		if test.same != same {
+			t.Errorf("For values %v and %v, expected same to be %t, was %t",
+				test.a, test.b, test.same, same)
 		}
 	}
 }
 
-func TestNoConflict(t *testing.T) {
-	bin := testbinPath()
-
-	// To free the slot immediately, return immediately after start and use zero overlap.
-	c := makeTestCommand(bin, 0, -1*time.Second)
-	v := []string{"val0", "val1"}
-	a := arguments{c, v, 0}
-
-	// Check first exec (first value).
-	stderr := newNilWriter()
-	cmdStdout := newSearchWriter("testbin[val0] | Print to stdout")
-	cmdStderr := newSearchWriter("testbin[val0] | Print to stderr")
-	startAlternate(a, stderr, cmdStdout, cmdStderr)
-	time.Sleep(100 * time.Millisecond)
-	if !cmdStdout.found {
-		t.Error("Expected cmdStdout.found to be true (1st exec), was false")
+func TestLineWriter(t *testing.T) {
+	type action struct {
+		reset bool
+		write string
 	}
-	if !cmdStderr.found {
-		t.Error("Expected cmdStderr.found to be true (1st exec), was false")
+	tests := []struct {
+		actions []action
+		lines   []string
+	}{
+		{
+			[]action{
+				{false, "abc\nde\n\nf"},
+			},
+			[]string{"abc", "de", "f"},
+		},
 	}
 
-	// Check second exec (second value).
-	cmdStdout.reset("testbin[val1] | Print to stdout")
-	cmdStderr.reset("testbin[val1] | Print to stderr")
-	triggerAlternate()
-	if !cmdStdout.found {
-		t.Error("Expected cmdStdout.found to be true (2nd exec), was false")
-	}
-	if !cmdStderr.found {
-		t.Error("Expected cmdStderr.found to be true (2nd exec), was false")
-	}
+	for i, test := range tests {
+		writer := newLineWriter(false)
+		for _, a := range test.actions {
+			if a.reset {
+				writer.reset()
+			}
+			if a.write != "" {
+				writer.Write([]byte(a.write))
+			}
+		}
 
-	// Check third exec (back to first value). Should not conflict with already-exited first exec.
-	cmdStdout.reset("testbin[val0] | Print to stdout")
-	cmdStderr.reset("testbin[val0] | Print to stderr")
-	triggerAlternate()
-	if !cmdStdout.found {
-		t.Error("Expected cmdStdout.found to be true (3rd exec), was false")
-	}
-	if !cmdStderr.found {
-		t.Error("Expected cmdStderr.found to be true (3rd exec), was false")
-	}
+		lines := writer.getLines()
 
-	exitAlternate()
+		same := true
+		if len(test.lines) != len(lines) {
+			same = false
+		} else {
+			for j := range test.lines {
+				if test.lines[j] != lines[j] {
+					same = false
+					break
+				}
+			}
+		}
+
+		if !same {
+			t.Errorf("For test #%d, expected lines to be %v, but was %v", i, test.lines, lines)
+		}
+	}
 }
 
-func TestConflict(t *testing.T) {
-	bin := testbinPath()
+func TestNoOverlapNoConflict(t *testing.T) {
+	valueSets := [][]string{
+		{"val0", "val1"},
+		{"val0", "val1", "val0"},
+	}
+	o := zero
 
-	// To keep the slot busy, return 5s after start.
-	c := makeTestCommand(bin, 5*time.Second, -1*time.Second)
-	v := []string{"val0", "val1"}
-	a := arguments{c, v, 0}
+	for _, v := range valueSets {
+		a := testbin.SetBehavior(-one, zero, "a")
+		test := start(t, v, o)
+		test.expect(one, []string{
+			"val0 " + a + " | start",
+		})
 
-	// Check first exec (first value).
-	stderr := newNilWriter()
-	cmdStdout := newSearchWriter("testbin[val0] | Print to stdout")
-	cmdStderr := newSearchWriter("testbin[val0] | Print to stderr")
-	startAlternate(a, stderr, cmdStdout, cmdStderr)
-	if !cmdStdout.found {
-		t.Error("Expected cmdStdout.found to be true (1st exec), was false")
-	}
-	if !cmdStderr.found {
-		t.Error("Expected cmdStderr.found to be true (1st exec), was false")
-	}
+		b := testbin.SetBehavior(-one, zero, "b")
+		test.reset()
+		sendUsr1()
+		test.expect(one, []string{
+			"val1 " + b + " | start",
+			"val0 " + a + " | exit",
+		})
 
-	// Check second exec (second value).
-	cmdStdout.reset("testbin[val1] | Print to stdout")
-	cmdStderr.reset("testbin[val1] | Print to stderr")
-	triggerAlternate()
-	if !cmdStdout.found {
-		t.Error("Expected cmdStdout.found to be true (2nd exec), was false")
-	}
-	if !cmdStderr.found {
-		t.Error("Expected cmdStderr.found to be true (2nd exec), was false")
-	}
+		c := testbin.SetBehavior(-one, zero, "c")
+		test.reset()
+		sendUsr1()
+		test.expect(one, []string{
+			"val0 " + c + " | start",
+			"val1 " + b + " | exit",
+		})
 
-	// Check third exec (back to first value). Should conflict with still-running first exec.
-	cmdStdout.reset("testbin[val0] | Print to stdout")
-	cmdStderr.reset("testbin[val0] | Print to stderr")
-	triggerAlternate()
-	if cmdStdout.found {
-		t.Error("Expected cmdStdout.found to be false (3rd exec), was true")
+		stop()
 	}
-	if cmdStderr.found {
-		t.Error("Expected cmdStderr.found to be false (3rd exec), was true")
-	}
-
-	exitAlternate()
 }
 
-func binPath() string {
-	if savedBinPath != "" {
-		return savedBinPath
+func TestOverlapNoConflict(t *testing.T) {
+	valueSets := [][]string{
+		{"val0", "val1"},
+		{"val0", "val1", "val0"},
+	}
+	o := two
+
+	for _, v := range valueSets {
+		a := testbin.SetBehavior(-one, zero, "a")
+		test := start(t, v, o)
+		test.expect(one, []string{
+			"val0 " + a + " | start",
+		})
+
+		b := testbin.SetBehavior(-one, zero, "b")
+		test.reset()
+		sendUsr1()
+		test.expect(one, []string{
+			"val1 " + b + " | start",
+		})
+		test.reset()
+		test.expect(two, []string{
+			"val0 " + a + " | exit",
+		})
+
+		c := testbin.SetBehavior(-one, zero, "c")
+		test.reset()
+		sendUsr1()
+		test.expect(one, []string{
+			"val0 " + c + " | start",
+		})
+		test.reset()
+		test.expect(two, []string{
+			"val1 " + b + " | exit",
+		})
+
+		stop()
+	}
+}
+
+func TestNoOverlapConflict(t *testing.T) {
+	valueSets := [][]string{
+		{"val0", "val1"},
+		{"val0", "val1", "val0"},
+	}
+	o := zero
+
+	for _, v := range valueSets {
+		a := testbin.SetBehavior(-one, -one, "a")
+		test := start(t, v, o)
+		test.expect(one, []string{
+			"val0 " + a + " | start",
+		})
+
+		b := testbin.SetBehavior(-one, zero, "b")
+		test.reset()
+		sendUsr1()
+		test.expect(one, []string{
+			"val1 " + b + " | start",
+		})
+
+		testbin.SetBehavior(-one, zero, "c")
+		test.reset()
+		sendUsr1()
+		test.expect(one, []string{})
+
+		stop()
+	}
+}
+
+func TestOverlapConflict(t *testing.T) {
+	valueSets := [][]string{
+		{"val0", "val1"},
+		{"val0", "val1", "val0"},
+	}
+	o := two
+
+	for _, v := range valueSets {
+		a := testbin.SetBehavior(-one, -one, "a")
+		test := start(t, v, o)
+		test.expect(one, []string{
+			"val0 " + a + " | start",
+		})
+
+		b := testbin.SetBehavior(-one, zero, "b")
+		test.reset()
+		sendUsr1()
+		test.expect(one, []string{
+			"val1 " + b + " | start",
+		})
+		test.reset()
+		test.expect(two, []string{})
+
+		testbin.SetBehavior(-one, zero, "c")
+		test.reset()
+		sendUsr1()
+		test.expect(three, []string{})
+
+		stop()
+	}
+}
+
+func TestPrematureExit(t *testing.T) {
+	valueSets := [][]string{
+		{"val0", "val1"},
+		{"val0", "val1", "val0"},
+	}
+	o := two
+
+	for _, v := range valueSets {
+		a := testbin.SetBehavior(-one, zero, "a")
+		test := start(t, v, o)
+		test.expect(one, []string{
+			"val0 " + a + " | start",
+		})
+
+		b := testbin.SetBehavior(zero, zero, "b")
+		test.reset()
+		sendUsr1()
+		test.expect(one, []string{
+			"val1 " + b + " | start",
+			"val1 " + b + " | exit",
+		})
+		test.reset()
+		test.expect(two, []string{})
+
+		c := testbin.SetBehavior(-one, zero, "c")
+		test.reset()
+		sendUsr1()
+		test.expect(one, []string{
+			"val1 " + c + " | start",
+		})
+		test.reset()
+		test.expect(two, []string{
+			"val0 " + a + " | exit",
+		})
+
+		stop()
+	}
+}
+
+func TestExit(t *testing.T) {
+	v := []string{"val0"}
+	o := zero
+
+	testbin.SetBehavior(two, zero, "a")
+
+	c := testbin.Path() + " %alt"
+	a := arguments{c, v, o}
+
+	exited := false
+	go func() {
+		alternate(a, newNilWriter(), newNilWriter(), newNilWriter())
+		exited = true
+	}()
+
+	time.Sleep(one)
+	if exited {
+		t.Error("Was expecting exited to be false, was true")
 	}
 
-	dir := os.TempDir()
-	path := path.Join(dir, "testbin")
-	pkg := testbin.BinPkgPath()
-
-	c := exec.Command("go", "build", "-o", path, pkg)
-	c.Stdout = os.Stdout
-	c.Stderr = os.Stderr
-
-	fmt.Printf("Building testbin: %v\n", c.Args)
-
-	if err := c.Run(); err != nil {
-		panic(err)
+	time.Sleep(two)
+	if !exited {
+		t.Error("Was expecting exited to be true, was false")
 	}
-
-	savedTestbinPath = path
-	return path
-}
-
-func makeTestCommand(testbin string, exitAfterStart, exitAfterSigint time.Duration) string {
-	return fmt.Sprintf("%s %%alternate %s %s", testbin, exitAfterStart, exitAfterSigint)
-}
-
-func startAlternate(a arguments, stderr, cmdStdout, cmdStderr io.Writer) {
-	go alternate(a, stderr, cmdStdout, cmdStderr)
-	time.Sleep(100 * time.Millisecond)
-}
-
-func triggerAlternate() {
-	syscall.Kill(syscall.Getpid(), syscall.SIGUSR1)
-	time.Sleep(100 * time.Millisecond)
-}
-
-func exitAlternate() {
-	syscall.Kill(syscall.Getpid(), syscall.SIGUSR2)
-	time.Sleep(100 * time.Millisecond)
 }

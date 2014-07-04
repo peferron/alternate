@@ -5,79 +5,70 @@ import (
 	"log"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
+
+	"github.com/peferron/alternate/testbin"
 )
 
 type arguments struct {
 	arbitraryArg    string
+	behavior        string
 	exitAfterStart  time.Duration
 	exitAfterSigint time.Duration
 }
 
 func main() {
-	a := args()
+	rawArgs := strings.Join(os.Args[1:], " ")
+	rawBehavior := testbin.GetBehavior()
 
-	p := fmt.Sprintf("testbin[%s] | ", a.arbitraryArg)
+	b := strings.Fields(rawBehavior)
+	exitAfterStartDelay, err := time.ParseDuration(b[0])
+	if err != nil {
+		panic(err)
+	}
+	exitAfterSigintDelay, err := time.ParseDuration(b[1])
+	if err != nil {
+		panic(err)
+	}
+
+	p := fmt.Sprintf("%s %s | ", rawArgs, rawBehavior)
 	log.SetPrefix(p)
 	log.SetFlags(0)
 
-	log.Printf("Arguments: arbitraryArg = '%s', exitAfterStart = %vs, exitAfterSigint = %vs\n",
-		a.arbitraryArg, a.exitAfterStart.Seconds(), a.exitAfterSigint.Seconds())
+	logf("start\n")
 
-	// Test printing to stdout and stderr.
-	log.SetOutput(os.Stdout)
-	log.Println("Print to stdout")
-	log.SetOutput(os.Stderr)
-	log.Println("Print to stderr")
+	exit := make(chan struct{})
+	go exitAfterStart(exitAfterStartDelay, exit)
+	go exitAfterSigint(exitAfterSigintDelay, exit)
 
-	if a.exitAfterStart >= 0 {
-		go exitAfterStart(a.exitAfterStart)
-	}
-
-	if a.exitAfterSigint >= 0 {
-		go exitAfterSigint(a.exitAfterSigint)
-	}
-
-	time.Sleep(time.Hour)
+	<-exit
+	logf("exit")
 }
 
-func args() arguments {
-	arbitraryArg := os.Args[1]
-
-	exitAfterStart, err := time.ParseDuration(os.Args[2])
-	if err != nil {
-		panic(err)
-	}
-
-	exitAfterSigint, err := time.ParseDuration(os.Args[3])
-	if err != nil {
-		panic(err)
-	}
-
-	return arguments{
-		arbitraryArg,
-		exitAfterStart,
-		exitAfterSigint,
+func exitAfterStart(delay time.Duration, exit chan struct{}) {
+	if delay >= 0 {
+		time.Sleep(delay)
+		exit <- struct{}{}
 	}
 }
 
-func exitAfterStart(delay time.Duration) {
-	log.Printf("exitAfterStart: Will exit after %vs\n", delay.Seconds())
-	time.Sleep(delay)
-	log.Println("exitAfterStart: Exiting now")
-	os.Exit(0)
-}
-
-func exitAfterSigint(delay time.Duration) {
-	log.Println("exitAfterSigint: Waiting for SIGINT")
+func exitAfterSigint(delay time.Duration, exit chan struct{}) {
 	sigint := make(chan os.Signal)
 	signal.Notify(sigint, syscall.SIGINT)
-	<-sigint
+	for _ = range sigint {
+		if delay >= 0 {
+			time.Sleep(delay)
+			close(sigint)
+		}
+	}
+	exit <- struct{}{}
+}
 
-	log.Printf("exitAfterSigint: Received SIGINT, will exit after %vs\n", delay.Seconds())
-	time.Sleep(delay)
-
-	log.Println("exitAfterSigint: Exiting now")
-	os.Exit(0)
+func logf(format string, a ...interface{}) {
+	log.SetOutput(os.Stdout)
+	log.Printf(format, a...)
+	log.SetOutput(os.Stderr)
+	log.Printf(format, a...)
 }
