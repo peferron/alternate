@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"io"
 	"log"
 	"os"
@@ -85,9 +86,7 @@ func alternate(command string, placeholder string, values []string, overlap time
 			}
 
 			if overlap == 0 {
-				if m.nextCmd() != nil && interruptCmd(m.currentCmd()) {
-					m.next()
-				}
+				interruptCurrentCmd(m)
 			} else {
 				go func() {
 					time.Sleep(overlap)
@@ -96,23 +95,30 @@ func alternate(command string, placeholder string, values []string, overlap time
 			}
 
 		case <-overlapEnd:
-			if m.nextCmd() != nil && interruptCmd(m.currentCmd()) {
-				m.next()
-			}
+			interruptCurrentCmd(m)
 		}
 	}
 }
 
-func interruptCmd(c *exec.Cmd) bool {
+func interruptCurrentCmd(m *manager) {
+	if m.nextCmd() == nil {
+		return
+	}
+	if err := interruptCmd(m.currentCmd()); err == nil {
+		m.next()
+	}
+}
+
+func interruptCmd(c *exec.Cmd) error {
 	if c == nil {
-		return false
+		return errors.New("interruptCmd error: cmd is nil")
 	}
 	p := c.Process
 	if p == nil {
-		return false
+		return errors.New("interruptCmd error: cmd.Process is nil")
 	}
 	p.Signal(os.Interrupt)
-	return true
+	return nil
 }
 
 func cmd(s string, stdout, stderr io.Writer) *exec.Cmd {
