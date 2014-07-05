@@ -25,7 +25,7 @@ type manager struct {
 
 func (m *manager) currentParam() string {
 	if m.i < 0 {
-		log.Fatal("Cannot call manager.currentParam when i is 0")
+		log.Fatalf("Cannot call manager.currentParam when manager.i is %d", m.i)
 	}
 	return m.params[m.i%len(m.params)]
 }
