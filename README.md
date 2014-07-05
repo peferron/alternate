@@ -21,7 +21,7 @@ $ alternate <command> <parameters...> <overlap>
 ```
 
 - `command` is the command to run, with `%alt` acting as placeholder for the rotated parameters. 
-- `parameters...` is a space-separated list of parameters to rotate through.
+- `parameters...` is a space-separated list of parameters to rotate through after receiving a USR1 signal.
 - `overlap` is the delay between starting the next command, and sending an interrupt signal (SIGINT, Ctrl-C) to the previous command.
 
 ## Example
