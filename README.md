@@ -1,3 +1,5 @@
+# alternate [![Build Status](https://drone.io/github.com/peferron/alternate/status.png)](https://drone.io/github.com/peferron/alternate/latest) [![Coverage Status](https://coveralls.io/repos/peferron/alternate/badge.png?branch=master)](https://coveralls.io/r/peferron/alternate?branch=master)
+
 `alternate` is a simple CLI tool for running a server on alternating ports. Used together with a reverse proxy like [nginx](http://nginx.org/), [Apache](https://httpd.apache.org/) or [HAProxy](http://www.haproxy.org/), it makes zero-downtime upgrade of web servers easy.
 
 ## Installation
