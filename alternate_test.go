@@ -187,6 +187,26 @@ func process() *os.Process {
 	return p
 }
 
+func TestSameStrings(t *testing.T) {
+	tests := []struct {
+		a    []string
+		b    []string
+		same bool
+	}{
+		{[]string{"a", "b"}, []string{"a", "b"}, true},
+		{[]string{"b", "a"}, []string{"a", "b"}, true},
+		{[]string{"a", "b", "c"}, []string{"a", "b"}, false},
+	}
+
+	for _, test := range tests {
+		same := sameStrings(test.a, test.b)
+		if test.same != same {
+			t.Errorf("For values %q and %q, expected same to be %t, was %t",
+				test.a, test.b, test.same, same)
+		}
+	}
+}
+
 func TestLineWriter(t *testing.T) {
 	type action struct {
 		reset bool
