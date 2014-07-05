@@ -60,7 +60,7 @@ func (w *lineWriter) Write(p []byte) (n int, err error) {
 		}
 		w.lines = append(w.lines, s)
 		if w.log {
-			fmt.Printf("LineWriter received: '%s'\n", s)
+			fmt.Printf("LineWriter received: %q\n", s)
 		}
 	}
 	w.buf = a[len(a)-1]
@@ -108,16 +108,16 @@ func (test *test) expect(d time.Duration, lines []string) {
 
 	stdoutLines := test.cmdStdout.getLines()
 	if !sameStrings(lines, stdoutLines) {
-		fmt.Printf("For parameters %v expect #%d, within %v expected lines %v in stdout, was %v\n",
+		fmt.Printf("For parameters %q expect #%d, within %v expected lines %q in stdout, was %q\n",
 			test.params, expectIndex, d, lines, stdoutLines)
-		test.t.Errorf("For parameters %v expect #%d, within %v expected lines %v in stdout, was %v",
+		test.t.Errorf("For parameters %q expect #%d, within %v expected lines %q in stdout, was %q",
 			test.params, expectIndex, d, lines, stdoutLines)
 	}
 	stderrLines := test.cmdStderr.getLines()
 	if !sameStrings(lines, stderrLines) {
-		fmt.Printf("For parameters %v expect #%d, within %v expected lines %v in stderr, was %v\n",
+		fmt.Printf("For parameters %q expect #%d, within %v expected lines %q in stderr, was %q\n",
 			test.params, expectIndex, d, lines, stderrLines)
-		test.t.Errorf("For parameters %v expect #%d, within %v expected lines %v in stderr, was %v",
+		test.t.Errorf("For parameters %q expect #%d, within %v expected lines %q in stderr, was %q",
 			test.params, expectIndex, d, lines, stderrLines)
 	}
 }
@@ -201,7 +201,7 @@ func TestSameStrings(t *testing.T) {
 	for _, test := range tests {
 		same := sameStrings(test.a, test.b)
 		if test.same != same {
-			t.Errorf("For values %v and %v, expected same to be %t, was %t",
+			t.Errorf("For values %q and %q, expected same to be %t, was %t",
 				test.a, test.b, test.same, same)
 		}
 	}
@@ -250,7 +250,7 @@ func TestLineWriter(t *testing.T) {
 		}
 
 		if !same {
-			t.Errorf("For test #%d, expected lines to be %v, but was %v", i, test.lines, lines)
+			t.Errorf("For test #%d, expected lines to be %q, but was %q", i, test.lines, lines)
 		}
 	}
 }

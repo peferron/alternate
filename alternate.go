@@ -27,8 +27,8 @@ func alternate(command string, placeholder string, params []string, overlap time
 	log.SetOutput(stderr)
 	log.SetFlags(0)
 
-	log.Printf("Starting with command '%s', placeholder '%s', params = %v, overlap = %vs\n",
-		command, placeholder, params, overlap.Seconds())
+	log.Printf("Starting with command %q, placeholder %q, params = %q, overlap = %v\n",
+		command, placeholder, params, overlap)
 
 	// When a command exits, cmdExit receives the parameter this command was run with.
 	cmdExit := make(chan string)
@@ -50,7 +50,7 @@ func alternate(command string, placeholder string, params []string, overlap time
 			return
 
 		case param := <-cmdExit:
-			log.Printf("The command with parameter '%s' exited\n", param)
+			log.Printf("The command with parameter %q exited\n", param)
 			m.unsetCmd(param)
 			if !m.hasCmds() {
 				log.Println("All commands have exited, exiting alternate")
@@ -63,10 +63,10 @@ func alternate(command string, placeholder string, params []string, overlap time
 		case <-next:
 			nextParam := m.nextParam()
 			if !m.first() {
-				log.Printf("Received signal USR1, rotating to next parameter: '%s'", nextParam)
+				log.Printf("Received signal USR1, rotating to next parameter: %q", nextParam)
 			}
 			if m.nextCmd() != nil {
-				log.Printf("A command with parameter '%s' is already running, cannot run again",
+				log.Printf("A command with parameter %q is already running, cannot run again",
 					nextParam)
 				break
 			}
@@ -75,8 +75,8 @@ func alternate(command string, placeholder string, params []string, overlap time
 			nextCmd := cmd(s, cmdStdout, cmdStderr)
 			m.setCmd(nextParam, nextCmd)
 
-			if err := run(nextCmd, cmdExit, nextParam); err != nil {
-				log.Printf("Failed to run the command with parameter '%s', error: '%s'\n",
+			if err := run(nextCmd, nextParam, cmdExit); err != nil {
+				log.Printf("Failed to run the command with parameter %q, error: %v\n",
 					err.Error())
 				m.unsetCmd(nextParam)
 				break
@@ -127,14 +127,14 @@ func cmd(s string, stdout, stderr io.Writer) *exec.Cmd {
 	return c
 }
 
-func run(c *exec.Cmd, exit chan string, v string) error {
-	log.Printf("Running command with parameter '%s'\n", v)
+func run(c *exec.Cmd, param string, exit chan string) error {
+	log.Printf("Running command with parameter %q\n", param)
 	if err := c.Start(); err != nil {
 		return err
 	}
 	go func() {
 		c.Wait()
-		exit <- v
+		exit <- param
 	}()
 	return nil
 }
