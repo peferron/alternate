@@ -11,8 +11,9 @@ import (
 	"time"
 )
 
-// exit is a channel that is used during testing only, to return from the alternate function.
-var exit chan struct{}
+// testExit is a channel that is used during testing only to trigger a return from the alternate
+// function.
+var testExit chan struct{}
 
 // alternate runs a command with alternating values inserted in place of the placeholder. Each time
 // a SIGUSR1 is received, a new command is run with the next value, and the previous command is sent
@@ -44,8 +45,8 @@ func alternate(command string, placeholder string, values []string, overlap time
 
 	for {
 		select {
-		case <-exit:
-			log.Println("Exit channel triggered, exiting")
+		case <-testExit:
+			log.Println("testExit channel triggered, exiting alternate")
 			return
 
 		case value := <-cmdExit:

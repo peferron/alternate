@@ -153,8 +153,8 @@ func clone(a []string) []string {
 }
 
 func init() {
-	fmt.Println("initializing exit")
-	exit = make(chan struct{})
+	fmt.Println("initializing testExit")
+	testExit = make(chan struct{})
 }
 
 func start(t *testing.T, values []string, overlap time.Duration) *test {
@@ -175,7 +175,7 @@ func sendUsr1() {
 }
 
 func stop() {
-	exit <- struct{}{}
+	testExit <- struct{}{}
 	time.Sleep(one)
 }
 
