@@ -1,7 +1,7 @@
 package main
 
 import (
-	"errors"
+	"log"
 	"os/exec"
 )
 
@@ -25,7 +25,7 @@ type manager struct {
 
 func (m *manager) currentParam() string {
 	if m.i < 0 {
-		panic(errors.New("Cannot call manager.currentParam when i is 0"))
+		log.Fatal("Cannot call manager.currentParam when i is 0")
 	}
 	return m.params[m.i%len(m.params)]
 }
