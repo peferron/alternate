@@ -40,12 +40,7 @@ func alternate(command string, placeholder string, values []string, overlap time
 	// cmdExit receives the value associated with a command when the command exits.
 	cmdExit := make(chan string)
 
-	// cmds maps values to their running commands.
-	cmds := map[string]*exec.Cmd{}
-
-	// i is the index of the currently running command. It increases by 1 every time alternate
-	// successfully moves to the next value.
-	i := -1
+	m := newManager(values)
 
 	for {
 		select {
@@ -55,42 +50,42 @@ func alternate(command string, placeholder string, values []string, overlap time
 
 		case value := <-cmdExit:
 			log.Printf("Command with value '%s' exited\n", value)
-			delete(cmds, value)
-			if len(cmds) == 0 {
+			m.unsetCmd(value)
+			if !m.hasCmds() {
 				log.Println("No running commands, exiting")
 				return
 			}
 
 		case signal := <-next:
-			l := len(values)
-			nextValue := values[(i+1)%l]
+			nextValue := m.nextValue()
 
 			if signal == syscall.SIGUSR1 {
 				log.Printf("Received USR1, trying to move to next value: '%s'", nextValue)
 			}
 
-			if _, ok := cmds[nextValue]; ok {
+			if m.nextCmd() != nil {
 				log.Printf("Command with value '%s' still running, cannot run again\n", nextValue)
 				break
 			}
 
 			s := strings.Replace(command, placeholder, nextValue, 1)
 			nextCmd := cmd(s, cmdStdout, cmdStderr)
-			cmds[nextValue] = nextCmd
+			m.setCmd(nextValue, nextCmd)
+
 			if err := run(nextCmd, cmdExit, nextValue); err != nil {
 				log.Printf("Command with value '%s' failed to run, error: '%s'\n", err.Error())
-				delete(cmds, nextValue)
+				m.unsetCmd(nextValue)
 				break
 			}
 
-			if i < 0 {
-				i++
+			if m.first() {
+				m.next()
 				break
 			}
 
 			if overlap == 0 {
-				if interruptCurrentCmd(cmds, values, i) {
-					i++
+				if m.nextCmd() != nil && interruptCmd(m.currentCmd()) {
+					m.next()
 				}
 			} else {
 				go func() {
@@ -100,34 +95,21 @@ func alternate(command string, placeholder string, values []string, overlap time
 			}
 
 		case <-overlapEnd:
-			if interruptCurrentCmd(cmds, values, i) {
-				i++
+			if m.nextCmd() != nil && interruptCmd(m.currentCmd()) {
+				m.next()
 			}
 		}
 	}
 }
 
-func interruptCurrentCmd(cmds map[string]*exec.Cmd, values []string, i int) bool {
-	l := len(values)
-	nextValue := values[(i+1)%l]
-	if _, ok := cmds[nextValue]; !ok {
-		// The next command exited prematurely
+func interruptCmd(c *exec.Cmd) bool {
+	if c == nil {
 		return false
 	}
-
-	currentValue := values[i%l]
-	currentCmd, ok := cmds[currentValue]
-	if !ok {
-		return false
-	}
-
-	p := currentCmd.Process
+	p := c.Process
 	if p == nil {
 		return false
 	}
-
-	log.Printf("Overlap finished, sending SIGINT to command with value '%s'",
-		currentValue)
 	p.Signal(os.Interrupt)
 	return true
 }
