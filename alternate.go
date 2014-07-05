@@ -48,6 +48,7 @@ func alternate(command string, placeholder string, params []string, overlap time
 		select {
 		case <-testExit:
 			log.Println("The test exit channel received a value, exiting alternate")
+			killAllCmds(params, m)
 			return
 
 		case param := <-cmdExit:
@@ -149,4 +150,15 @@ func run(c *exec.Cmd, param string, exit chan string) error {
 		exit <- param
 	}()
 	return nil
+}
+
+func killAllCmds(params []string, m *manager) {
+	for _, param := range params {
+		if c := m.cmd(param); c != nil {
+			if p := c.Process; p != nil {
+				log.Printf("Killing command with parameter %q\n", param)
+				p.Signal(os.Kill)
+			}
+		}
+	}
 }
