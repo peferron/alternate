@@ -8,11 +8,11 @@ import (
 type manager struct {
 	i      int
 	cmds   map[string]*exec.Cmd
-	values []string
+	params []string
 }
 
-func newManager(values []string) *manager {
-	return &manager{-1, map[string]*exec.Cmd{}, values}
+func newManager(params []string) *manager {
+	return &manager{-1, map[string]*exec.Cmd{}, params}
 }
 
 func (m *manager) first() bool {
@@ -23,23 +23,23 @@ func (m *manager) next() {
 	m.i++
 }
 
-func (m *manager) currentValue() string {
+func (m *manager) currentParam() string {
 	if m.i < 0 {
-		panic(errors.New("Cannot call manager.currentValue when i is 0"))
+		panic(errors.New("Cannot call manager.currentParam when i is 0"))
 	}
-	return m.values[m.i%len(m.values)]
+	return m.params[m.i%len(m.params)]
 }
 
-func (m *manager) nextValue() string {
-	return m.values[(m.i+1)%len(m.values)]
+func (m *manager) nextParam() string {
+	return m.params[(m.i+1)%len(m.params)]
 }
 
 func (m *manager) currentCmd() *exec.Cmd {
-	return m.cmd(m.currentValue())
+	return m.cmd(m.currentParam())
 }
 
 func (m *manager) nextCmd() *exec.Cmd {
-	return m.cmd(m.nextValue())
+	return m.cmd(m.nextParam())
 }
 
 func (m *manager) cmd(value string) *exec.Cmd {

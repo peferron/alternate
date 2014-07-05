@@ -16,65 +16,66 @@ import (
 // function.
 var testExit chan struct{}
 
-// alternate runs a command with alternating values inserted in place of the placeholder. Each time
-// a SIGUSR1 is received, a new command is run with the next value, and the previous command is sent
-// a SIGINT after the overlap duration has elapsed. The alternate logs are written to stderr, and
-// the command logs are written to cmdStdout and cmdStderr;
-func alternate(command string, placeholder string, values []string, overlap time.Duration,
+// alternate runs a command with alternating parameters inserted in place of the placeholder. Each
+// time a SIGUSR1 is received, a new command is run with the next param, and the previous command is
+// sent a SIGINT after the overlap duration has elapsed. The alternate logs are written to stderr,
+// and the command logs are written to cmdStdout and cmdStderr.
+func alternate(command string, placeholder string, params []string, overlap time.Duration,
 	stderr, cmdStdout, cmdStderr io.Writer) {
 
 	log.SetPrefix("alternate | ")
 	log.SetOutput(stderr)
 	log.SetFlags(0)
 
-	log.Printf("Starting with command = '%s', placeholder '%s', values = %v, overlap = %vs\n",
-		command, placeholder, values, overlap.Seconds())
+	log.Printf("Starting with command '%s', placeholder '%s', params = %v, overlap = %vs\n",
+		command, placeholder, params, overlap.Seconds())
 
-	// next receives a signal when the next command should be run.
 	next := make(chan os.Signal, 1)
 	signal.Notify(next, syscall.SIGUSR1)
-	// Run the first command.
+	// Buffer a fake USR1 signal to run the first command.
 	next <- syscall.SIGUSR1
 
-	// overlapEnd receives an empty struct when the overlap duration has elapsed.
+	// When the overlap duration has elapsed, overlapEnd receives an empty struct.
 	overlapEnd := make(chan struct{})
 
-	// cmdExit receives the value associated with a command when the command exits.
+	// When a command exits, cmdExit receives the param this command was run with.
 	cmdExit := make(chan string)
 
-	m := newManager(values)
+	m := newManager(params)
 
 	for {
 		select {
 		case <-testExit:
-			log.Println("testExit channel triggered, exiting alternate")
+			log.Println("Test exit channel received a value, exiting alternate")
 			return
 
-		case value := <-cmdExit:
-			log.Printf("Command with value '%s' exited\n", value)
-			m.unsetCmd(value)
+		case param := <-cmdExit:
+			log.Printf("The command run with parameter '%s' exited\n", param)
+			m.unsetCmd(param)
 			if !m.hasCmds() {
-				log.Println("No running commands, exiting")
+				log.Println("All commands have exited, exiting alternate")
 				return
 			}
 
 		case <-next:
-			nextValue := m.nextValue()
+			nextParam := m.nextParam()
 			if !m.first() {
-				log.Printf("Received signal USR1, trying to move to next value: '%s'", nextValue)
+				log.Printf("Received signal USR1, trying to move to next parameter: '%s'",
+					nextParam)
 			}
 			if m.nextCmd() != nil {
-				log.Printf("Command with value '%s' still running, cannot run again\n", nextValue)
+				log.Printf("Command with parameter '%s' still running, cannot run again\n",
+					nextParam)
 				break
 			}
 
-			s := strings.Replace(command, placeholder, nextValue, 1)
+			s := strings.Replace(command, placeholder, nextParam, 1)
 			nextCmd := cmd(s, cmdStdout, cmdStderr)
-			m.setCmd(nextValue, nextCmd)
+			m.setCmd(nextParam, nextCmd)
 
-			if err := run(nextCmd, cmdExit, nextValue); err != nil {
-				log.Printf("Command with value '%s' failed to run, error: '%s'\n", err.Error())
-				m.unsetCmd(nextValue)
+			if err := run(nextCmd, cmdExit, nextParam); err != nil {
+				log.Printf("Command with parameter '%s' failed to run, error: '%s'\n", err.Error())
+				m.unsetCmd(nextParam)
 				break
 			}
 
@@ -127,7 +128,7 @@ func cmd(s string, stdout, stderr io.Writer) *exec.Cmd {
 }
 
 func run(c *exec.Cmd, exit chan string, v string) error {
-	log.Printf("Running command with value '%s'\n", v)
+	log.Printf("Running command with parameter '%s'\n", v)
 	if err := c.Start(); err != nil {
 		return err
 	}
