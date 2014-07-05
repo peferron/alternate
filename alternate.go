@@ -17,9 +17,9 @@ import (
 var testExit chan struct{}
 
 // alternate runs a command with alternating parameters inserted in place of the placeholder. Each
-// time a SIGUSR1 is received, a new command is run with the next param, and the previous command is
-// sent a SIGINT after the overlap duration has elapsed. The alternate logs are written to stderr,
-// and the command logs are written to cmdStdout and cmdStderr.
+// time a SIGUSR1 is received, a new command is run with the next parameter, and a SIGINT is sent to
+// the previous command after the overlap duration has elapsed. The alternate logs are written to
+// stderr, and the command logs are written to cmdStdout and cmdStderr.
 func alternate(command string, placeholder string, params []string, overlap time.Duration,
 	stderr, cmdStdout, cmdStderr io.Writer) {
 
@@ -30,41 +30,43 @@ func alternate(command string, placeholder string, params []string, overlap time
 	log.Printf("Starting with command '%s', placeholder '%s', params = %v, overlap = %vs\n",
 		command, placeholder, params, overlap.Seconds())
 
-	next := make(chan os.Signal, 1)
-	signal.Notify(next, syscall.SIGUSR1)
-	// Buffer a fake USR1 signal to run the first command.
-	next <- syscall.SIGUSR1
+	// When a command exits, cmdExit receives the parameter this command was run with.
+	cmdExit := make(chan string)
 
 	// When the overlap duration has elapsed, overlapEnd receives an empty struct.
 	overlapEnd := make(chan struct{})
 
-	// When a command exits, cmdExit receives the param this command was run with.
-	cmdExit := make(chan string)
+	next := make(chan os.Signal, 1)
+	signal.Notify(next, syscall.SIGUSR1)
+	// Buffer a fake USR1 signal to run the first command.
+	next <- syscall.SIGUSR1
 
 	m := newManager(params)
 
 	for {
 		select {
 		case <-testExit:
-			log.Println("Test exit channel received a value, exiting alternate")
+			log.Println("The test exit channel received a value, exiting alternate")
 			return
 
 		case param := <-cmdExit:
-			log.Printf("The command run with parameter '%s' exited\n", param)
+			log.Printf("The command with parameter '%s' exited\n", param)
 			m.unsetCmd(param)
 			if !m.hasCmds() {
 				log.Println("All commands have exited, exiting alternate")
 				return
 			}
 
+		case <-overlapEnd:
+			interruptCurrentCmd(m)
+
 		case <-next:
 			nextParam := m.nextParam()
 			if !m.first() {
-				log.Printf("Received signal USR1, trying to move to next parameter: '%s'",
-					nextParam)
+				log.Printf("Received signal USR1, rotating to next parameter: '%s'", nextParam)
 			}
 			if m.nextCmd() != nil {
-				log.Printf("Command with parameter '%s' still running, cannot run again\n",
+				log.Printf("A command with parameter '%s' is already running, cannot run again",
 					nextParam)
 				break
 			}
@@ -74,7 +76,8 @@ func alternate(command string, placeholder string, params []string, overlap time
 			m.setCmd(nextParam, nextCmd)
 
 			if err := run(nextCmd, cmdExit, nextParam); err != nil {
-				log.Printf("Command with parameter '%s' failed to run, error: '%s'\n", err.Error())
+				log.Printf("Failed to run the command with parameter '%s', error: '%s'\n",
+					err.Error())
 				m.unsetCmd(nextParam)
 				break
 			}
@@ -92,9 +95,6 @@ func alternate(command string, placeholder string, params []string, overlap time
 					overlapEnd <- struct{}{}
 				}()
 			}
-
-		case <-overlapEnd:
-			interruptCurrentCmd(m)
 		}
 	}
 }
