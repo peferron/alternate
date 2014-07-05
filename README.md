@@ -43,7 +43,7 @@ $ alternate "/home/me/myserver 127.0.0.1:%alt" 3000 3001 10s
 
 Although `alternate` can be used to run any command, it was primarily designed to make zero-downtime upgrade of web servers easy.
 
-The setup presented below uses nginx as a reverse proxy. Even if you don't use `alternate`, you should consider using a reverse proxy in front of your web server: it lets you configure static file serving, caching headers and so on very easily, without having to bake all this functionality into your web server. Apache and many others would do the job as well, but the setup below uses nginx.
+The setup presented below uses [nginx](http://nginx.org/) as a reverse proxy. Even if you don't use `alternate`, you should consider using a reverse proxy in front of your web server: it lets you configure static file serving, caching headers and so on very easily, without having to bake all this functionality into your web server. [Apache](https://httpd.apache.org/) and many others would do the job as well, but the setup below uses nginx.
 
 Typical setup for running an API server (serving JSON for example) with zero-downtime reloading:
 
