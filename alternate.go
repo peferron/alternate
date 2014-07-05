@@ -37,9 +37,10 @@ func alternate(command string, placeholder string, params []string, overlap time
 	overlapEnd := make(chan struct{})
 
 	next := make(chan os.Signal, 1)
-	signal.Notify(next, syscall.SIGUSR1)
 	// Buffer a fake USR1 signal to run the first command.
 	next <- syscall.SIGUSR1
+	// Then listen to real user-triggered USR1 signals.
+	signal.Notify(next, syscall.SIGUSR1)
 
 	m := newManager(params)
 
@@ -58,7 +59,7 @@ func alternate(command string, placeholder string, params []string, overlap time
 			}
 
 		case <-overlapEnd:
-			interruptCurrentCmd(m)
+			finishRotation(m)
 
 		case <-next:
 			nextParam := m.nextParam()
@@ -83,12 +84,12 @@ func alternate(command string, placeholder string, params []string, overlap time
 			}
 
 			if m.first() {
-				m.next()
+				m.rotate()
 				break
 			}
 
 			if overlap == 0 {
-				interruptCurrentCmd(m)
+				finishRotation(m)
 			} else {
 				go func() {
 					time.Sleep(overlap)
@@ -99,13 +100,19 @@ func alternate(command string, placeholder string, params []string, overlap time
 	}
 }
 
-func interruptCurrentCmd(m *manager) {
+func finishRotation(m *manager) {
 	if m.nextCmd() == nil {
+		// The next command is not running, cancel the rotation without interrupting the current
+		// command.
 		return
 	}
-	if err := interruptCmd(m.currentCmd()); err == nil {
-		m.next()
+	if c := m.currentCmd(); c != nil {
+		if err := interruptCmd(c); err != nil {
+			log.Printf("Failed to interrupt the command with parameter %q, error: %v\n",
+				m.currentParam(), err)
+		}
 	}
+	m.rotate()
 }
 
 func interruptCmd(c *exec.Cmd) error {

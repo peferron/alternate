@@ -12,15 +12,17 @@ type manager struct {
 }
 
 func newManager(params []string) *manager {
-	return &manager{-1, map[string]*exec.Cmd{}, params}
+	return &manager{
+		-1,
+		map[string]*exec.Cmd{},
+		params,
+	}
 }
+
+// Functions that keep the manager state unchanged
 
 func (m *manager) first() bool {
 	return m.i == -1
-}
-
-func (m *manager) next() {
-	m.i++
 }
 
 func (m *manager) currentParam() string {
@@ -49,14 +51,20 @@ func (m *manager) cmd(value string) *exec.Cmd {
 	return nil
 }
 
+func (m *manager) hasCmds() bool {
+	return len(m.cmds) > 0
+}
+
+// Functions that change the manager state
+
+func (m *manager) rotate() {
+	m.i++
+}
+
 func (m *manager) setCmd(value string, cmd *exec.Cmd) {
 	m.cmds[value] = cmd
 }
 
 func (m *manager) unsetCmd(value string) {
 	delete(m.cmds, value)
-}
-
-func (m *manager) hasCmds() bool {
-	return len(m.cmds) > 0
 }
