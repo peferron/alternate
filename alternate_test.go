@@ -20,6 +20,11 @@ const (
 	three               = 3 * one
 )
 
+func init() {
+	fmt.Println("Initializing testExit channel")
+	testExit = make(chan struct{})
+}
+
 func newNilWriter() *nilWriter {
 	return &nilWriter{}
 }
@@ -152,11 +157,6 @@ func clone(a []string) []string {
 	return b
 }
 
-func init() {
-	fmt.Println("initializing testExit")
-	testExit = make(chan struct{})
-}
-
 func start(t *testing.T, params []string, overlap time.Duration) *test {
 	test := &test{
 		t,
@@ -185,26 +185,6 @@ func process() *os.Process {
 		panic(err)
 	}
 	return p
-}
-
-func TestSameStrings(t *testing.T) {
-	tests := []struct {
-		a    []string
-		b    []string
-		same bool
-	}{
-		{[]string{"a", "b"}, []string{"a", "b"}, true},
-		{[]string{"b", "a"}, []string{"a", "b"}, true},
-		{[]string{"a", "b", "c"}, []string{"a", "b"}, false},
-	}
-
-	for _, test := range tests {
-		same := sameStrings(test.a, test.b)
-		if test.same != same {
-			t.Errorf("For values %q and %q, expected same to be %t, was %t",
-				test.a, test.b, test.same, same)
-		}
-	}
 }
 
 func TestLineWriter(t *testing.T) {
