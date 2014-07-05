@@ -11,7 +11,10 @@ import (
 
 type t struct{}
 
-var savedBinPath = ""
+var (
+	built     = false
+	buildPath = ""
+)
 
 const behaviorKey = "ALTERNATE_TESTBIN_BEHAVIOR"
 
@@ -24,15 +27,39 @@ func SetBehavior(exitAfterStartDelay, exitAfterSigintDelay time.Duration, label 
 	return s
 }
 
-func Path() string {
-	if savedBinPath != "" {
-		return savedBinPath
+func Build() string {
+	if built {
+		return buildPath
 	}
 
-	dir := os.TempDir()
-	path := path.Join(dir, "testbin")
+	if buildPath == "" {
+		dir := os.TempDir()
+		p := path.Join(dir, "testbin")
+		build(p)
+		buildPath = p
+	} else {
+		build(buildPath)
+	}
 
-	c := exec.Command("go", "build", "-o", path, binPkgPath())
+	built = true
+	return buildPath
+}
+
+func Clean() {
+	if !built {
+		return
+	}
+	if err := os.Remove(buildPath); err == nil {
+		built = false
+	}
+}
+
+func binPkgPath() string {
+	return reflect.TypeOf(t{}).PkgPath() + "/bin"
+}
+
+func build(p string) {
+	c := exec.Command("go", "build", "-o", p, binPkgPath())
 	c.Stdout = os.Stdout
 	c.Stderr = os.Stderr
 
@@ -41,11 +68,4 @@ func Path() string {
 	if err := c.Run(); err != nil {
 		panic(err)
 	}
-
-	savedBinPath = path
-	return path
-}
-
-func binPkgPath() string {
-	return reflect.TypeOf(t{}).PkgPath() + "/bin"
 }

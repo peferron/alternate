@@ -132,7 +132,8 @@ func interruptCmd(c *exec.Cmd) error {
 }
 
 func cmd(s string, stdout, stderr io.Writer) *exec.Cmd {
-	c := exec.Command("sh", "-c", s)
+	f := strings.Fields(s)
+	c := exec.Command(f[0], f[1:]...)
 	c.Stdout = stdout
 	c.Stderr = stderr
 	return c

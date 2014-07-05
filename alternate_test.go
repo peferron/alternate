@@ -165,7 +165,7 @@ func start(t *testing.T, params []string, overlap time.Duration) *test {
 		params,
 		0,
 	}
-	c := testbin.Path() + " " + placeholder
+	c := testbin.Build() + " " + placeholder
 	go alternate(c, placeholder, params, overlap, newNilWriter(), test.cmdStdout, test.cmdStderr)
 	return test
 }
@@ -430,8 +430,44 @@ func TestPrematureCmdExit(t *testing.T) {
 	}
 }
 
+func TestCmdRunError(t *testing.T) {
+	paramSets := [][]string{
+		{"param0", "param1"},
+		{"param0", "param1", "param0"},
+	}
+	o := zero
+
+	for _, v := range paramSets {
+		a := testbin.SetBehavior(-one, zero, "a")
+		test := start(t, v, o)
+		test.expect(one, []string{
+			"param0 " + a + " | start",
+		})
+
+		b := testbin.SetBehavior(-one, zero, "b")
+		test.reset()
+		testbin.Clean()
+		sendUsr1()
+		test.expect(one, []string{})
+
+		test.reset()
+		sendUsr1()
+		test.expect(one, []string{})
+
+		testbin.Build()
+		test.reset()
+		sendUsr1()
+		test.expect(one, []string{
+			"param1 " + b + " | start",
+			"param0 " + a + " | exit",
+		})
+
+		stop()
+	}
+}
+
 func TestAlternateExit(t *testing.T) {
-	c := testbin.Path() + " " + placeholder
+	c := testbin.Build() + " " + placeholder
 	v := []string{"param0"}
 	o := zero
 
