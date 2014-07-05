@@ -34,7 +34,7 @@ func alternate(command string, placeholder string, values []string, overlap time
 	next := make(chan os.Signal, 1)
 	signal.Notify(next, syscall.SIGUSR1)
 	// Run the first command.
-	next <- syscall.Signal(0)
+	next <- syscall.SIGUSR1
 
 	// overlapEnd receives an empty struct when the overlap duration has elapsed.
 	overlapEnd := make(chan struct{})
@@ -58,13 +58,11 @@ func alternate(command string, placeholder string, values []string, overlap time
 				return
 			}
 
-		case signal := <-next:
+		case <-next:
 			nextValue := m.nextValue()
-
-			if signal == syscall.SIGUSR1 {
-				log.Printf("Received USR1, trying to move to next value: '%s'", nextValue)
+			if !m.first() {
+				log.Printf("Received signal USR1, trying to move to next value: '%s'", nextValue)
 			}
-
 			if m.nextCmd() != nil {
 				log.Printf("Command with value '%s' still running, cannot run again\n", nextValue)
 				break
