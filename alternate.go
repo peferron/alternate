@@ -37,9 +37,9 @@ func alternate(command string, placeholder string, params []string, overlap time
 	overlapEnd := make(chan struct{})
 
 	next := make(chan os.Signal, 1)
-	// Buffer a fake USR1 signal to run the first command.
-	next <- syscall.SIGUSR1
-	// Then listen to real user-triggered USR1 signals.
+	// Buffer a fake signal to run the first command.
+	next <- syscall.Signal(0)
+	// Then listen to USR1 signals dispatched by the user.
 	signal.Notify(next, syscall.SIGUSR1)
 
 	m := newManager(params)
@@ -61,11 +61,14 @@ func alternate(command string, placeholder string, params []string, overlap time
 		case <-overlapEnd:
 			finishRotation(m)
 
-		case <-next:
+		case signal := <-next:
+			first := signal != syscall.SIGUSR1
 			nextParam := m.nextParam()
-			if !m.first() {
-				log.Printf("Received signal USR1, rotating to next parameter: %q", nextParam)
+
+			if !first {
+				log.Printf("Received signal USR1, rotating to next parameter %q", nextParam)
 			}
+
 			if m.nextCmd() != nil {
 				log.Printf("A command with parameter %q is already running, cannot run again",
 					nextParam)
@@ -83,7 +86,8 @@ func alternate(command string, placeholder string, params []string, overlap time
 				break
 			}
 
-			if m.first() {
+			if first {
+				// There is no previous command to interrupt.
 				m.rotate()
 				break
 			}

@@ -21,10 +21,6 @@ func newManager(params []string) *manager {
 
 // Functions that keep the manager state unchanged
 
-func (m *manager) first() bool {
-	return m.i == -1
-}
-
 func (m *manager) currentParam() string {
 	if m.i < 0 {
 		panic(errors.New("Cannot call manager.currentParam when i is 0"))
