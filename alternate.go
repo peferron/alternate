@@ -47,12 +47,12 @@ func alternate(command string, placeholder string, params []string, overlap time
 	for {
 		select {
 		case <-testExit:
-			log.Println("The test exit channel received a value, exiting alternate")
+			log.Println("Test exit channel received a value, exiting alternate")
 			killAllCmds(params, m)
 			return
 
 		case param := <-cmdExit:
-			log.Printf("The command with parameter %q exited\n", param)
+			log.Printf("Command with parameter %q exited\n", param)
 			m.unsetCmd(param)
 			if !m.hasCmds() {
 				log.Println("All commands have exited, exiting alternate")
@@ -96,6 +96,8 @@ func alternate(command string, placeholder string, params []string, overlap time
 			if overlap == 0 {
 				finishRotation(m)
 			} else {
+				log.Printf("Waiting %v before sending interrupt to command with parameter %q\n",
+					overlap, m.currentParam())
 				go func() {
 					time.Sleep(overlap)
 					overlapEnd <- struct{}{}
@@ -112,9 +114,11 @@ func finishRotation(m *manager) {
 		return
 	}
 	if c := m.currentCmd(); c != nil {
+		currentParam := m.currentParam()
+		log.Printf("Sending interrupt to command with parameter %q\n", currentParam)
 		if err := interruptCmd(c); err != nil {
-			log.Printf("Failed to interrupt the command with parameter %q, error: %v\n",
-				m.currentParam(), err)
+			log.Printf("Failed to send interrupt to command with parameter %q, error: %v\n",
+				currentParam, err)
 		}
 	}
 	m.rotate()

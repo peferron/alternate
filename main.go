@@ -11,9 +11,13 @@ const (
 	placeholder = "%alt"
 	usage       = `Usage: alternate <command> <parameters> <overlap>
 
-- command: command to run, with ` + placeholder + ` used a a placeholder for the rotated parameters. Example: /usr/bin/server 127.0.0.1:%alt
-- parameters: space-separated list of parameters to rotate through. Example: 3000 3001
-- overlap: delay between starting the next command and sending SIGINT to the previous one. Example: 10s`
+- command: command to run, with ` + placeholder + ` used a a placeholder for the rotated parameters.
+- parameters: space-separated list of parameters to rotate through after receiving a USR1 signal.
+- overlap: delay between starting the next command and sending an interrupt signal (SIGINT, Ctrl-C) to the previous one.
+
+Example: alternate "/home/me/myserver 127.0.0.1:%alt" 3000 3001 10s
+
+See https://github.com/peferron/alternate for more information.`
 )
 
 type arguments struct {
