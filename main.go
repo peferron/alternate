@@ -8,10 +8,10 @@ import (
 )
 
 const (
-	placeholder = "%s"
+	placeholder = "%alt"
 	usage       = `Usage: alternate <command> <parameters> <overlap>
 
-- command: command to run, with %alt used a a placeholder for the rotated parameters. Example: /usr/bin/server 127.0.0.1:%alt
+- command: command to run, with ` + placeholder + ` used a a placeholder for the rotated parameters. Example: /usr/bin/server 127.0.0.1:%alt
 - parameters: space-separated list of parameters to rotate through. Example: 3000 3001
 - overlap: delay between starting the next command and sending SIGINT to the previous one. Example: 10s`
 )
