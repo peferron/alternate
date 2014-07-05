@@ -25,7 +25,7 @@ type arguments struct {
 func main() {
 	a, err := args(os.Args)
 	if err != nil {
-		fmt.Printf("%s\n\n%s\n", err, usage)
+		fmt.Printf("%v\n\n%s\n", err, usage)
 		os.Exit(1)
 	}
 
