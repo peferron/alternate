@@ -1,6 +1,6 @@
 # alternate [![Build Status](https://drone.io/github.com/peferron/alternate/status.png)](https://drone.io/github.com/peferron/alternate/latest) [![Coverage Status](https://coveralls.io/repos/peferron/alternate/badge.png?branch=master)](https://coveralls.io/r/peferron/alternate?branch=master)
 
-`alternate` is a simple CLI tool for running a server on alternating ports. Used together with a reverse proxy like [nginx](http://nginx.org/), [Apache](https://httpd.apache.org/) or [HAProxy](http://www.haproxy.org/), it makes zero-downtime upgrade of web servers easy.
+`alternate` is a simple CLI tool for running a server on alternating ports. Together with a reverse proxy like [nginx](http://nginx.org/), [Apache](https://httpd.apache.org/) or [HAProxy](http://www.haproxy.org/), it makes zero-downtime upgrade of web servers easy.
 
 ## Installation
 
@@ -43,7 +43,7 @@ $ alternate "/home/me/myserver 127.0.0.1:%alt" 3000 3001 10s
 
 ## Zero-downtime upgrade of a web server
 
-Although `alternate` can be used to run any command, it was primarily designed to make zero-downtime upgrade of web servers easy.
+Although `alternate` can be used to run any command, it is primarily designed to make zero-downtime upgrade of web servers easy.
 
 The setup presented below uses [nginx](http://nginx.org/) as a reverse proxy. Even if you don't use `alternate`, you should consider using a reverse proxy in front of your web server: it lets you configure static file serving, caching headers and so on very easily, without having to bake all this functionality into your web server. [Apache](https://httpd.apache.org/) and many others would do the job as well, but the setup below uses nginx.
 
