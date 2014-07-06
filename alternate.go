@@ -80,6 +80,7 @@ func alternate(command string, placeholder string, params []string, overlap time
 			nextCmd := cmd(s, cmdStdout, cmdStderr)
 			m.setCmd(nextParam, nextCmd)
 
+			log.Printf("Running command with parameter %q\n", nextParam)
 			if err := run(nextCmd, nextParam, cmdExit); err != nil {
 				log.Printf("Failed to run the command with parameter %q, error: %v\n",
 					err.Error())
@@ -109,7 +110,7 @@ func alternate(command string, placeholder string, params []string, overlap time
 
 func finishRotation(m *manager) {
 	if m.nextCmd() == nil {
-		// The next command is not running, cancel the rotation without interrupting the current
+		// The next command is not running. Cancel the rotation without interrupting the current
 		// command.
 		return
 	}
@@ -124,6 +125,7 @@ func finishRotation(m *manager) {
 	m.rotate()
 }
 
+// interruptCmd sends SIGINT to a command.
 func interruptCmd(c *exec.Cmd) error {
 	if c == nil {
 		return errors.New("interruptCmd error: cmd is nil")
@@ -136,6 +138,8 @@ func interruptCmd(c *exec.Cmd) error {
 	return nil
 }
 
+// cmd returns a command built from the given string. The command will print to the given stdout and
+// stderr.
 func cmd(s string, stdout, stderr io.Writer) *exec.Cmd {
 	f := strings.Fields(s)
 	c := exec.Command(f[0], f[1:]...)
@@ -144,18 +148,20 @@ func cmd(s string, stdout, stderr io.Writer) *exec.Cmd {
 	return c
 }
 
-func run(c *exec.Cmd, param string, exit chan string) error {
-	log.Printf("Running command with parameter %q\n", param)
+// run runs a command without blocking. After the command exits, it sends exitMsg on the exit
+// channel.
+func run(c *exec.Cmd, exitMsg string, exit chan string) error {
 	if err := c.Start(); err != nil {
 		return err
 	}
 	go func() {
 		c.Wait()
-		exit <- param
+		exit <- exitMsg
 	}()
 	return nil
 }
 
+// killAllCmds sends a SIGKILL to all commands in the manager.
 func killAllCmds(params []string, m *manager) {
 	for _, param := range params {
 		if c := m.cmd(param); c != nil {
