@@ -15,7 +15,7 @@ import (
 
 const (
 	zero  time.Duration = 0
-	one                 = 10 * time.Millisecond
+	one                 = 50 * time.Millisecond
 	two                 = 2 * one
 	three               = 3 * one
 )
