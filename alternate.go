@@ -12,14 +12,14 @@ import (
 	"time"
 )
 
-// kill is a channel that is used during testing only to trigger a termination of all commands
-// and an immediate return from the alternate function.
-var kill chan struct{}
+// testKill is a channel that is used during testing only to trigger an immediate cleanup and return
+// from the alternate function.
+var testKill chan struct{}
 
 // alternate runs a command with alternating parameters inserted in place of the placeholder. Each
-// time a SIGUSR1 is received, a new command is run with the next parameter, and a SIGINT is sent to
-// the previous command after the overlap duration has elapsed. The alternate logs are written to
-// stderr, and the command logs are written to cmdStdout and cmdStderr.
+// time a USR1 signal is received, a new command is run with the next parameter, and a TERM signal
+// is sent to the previous command after the overlap duration has elapsed. The alternate logs are
+// written to stderr, and the command logs are written to cmdStdout and cmdStderr.
 func alternate(command string, placeholder string, params []string, overlap time.Duration,
 	stderr, cmdStdout, cmdStderr io.Writer) {
 
@@ -42,20 +42,25 @@ func alternate(command string, placeholder string, params []string, overlap time
 	// Then listen to USR1 signals dispatched by the user.
 	signal.Notify(next, syscall.SIGUSR1)
 
-	interrupt := make(chan os.Signal)
-	signal.Notify(interrupt, os.Interrupt)
+	term := make(chan os.Signal)
+	// Listen to both TERM signal (termination signal sent programmatically by e.g. supervisord)
+	// and INT signal (termination signal sent when the user presses Ctrl-C in the terminal).
+	signal.Notify(term, syscall.SIGTERM, syscall.SIGINT)
 
 	m := newManager(params)
 
 	for {
 		select {
-		case <-interrupt:
-			log.Println("Intercepted interrupt signal, will exit after all commands have exited")
-
-		case <-kill:
-			log.Println("Test exit channel received a value, exiting alternate")
-			killAllCmds(params, m)
+		case <-testKill:
+			log.Println("testKill channel received a value, sending KILL signal to all commands " +
+				"and exiting alternate")
+			signalAllCmds(params, m, syscall.SIGKILL)
 			return
+
+		case <-term:
+			log.Println("Received TERM or INT signal, sending TERM signal to all commands, will " +
+				"exit after all commands have exited")
+			signalAllCmds(params, m, syscall.SIGTERM)
 
 		case param := <-cmdExit:
 			log.Printf("Command with parameter %q exited\n", param)
@@ -68,8 +73,8 @@ func alternate(command string, placeholder string, params []string, overlap time
 		case <-overlapEnd:
 			finishRotation(m)
 
-		case signal := <-next:
-			first := signal != syscall.SIGUSR1
+		case s := <-next:
+			first := s != syscall.SIGUSR1
 			nextParam := m.nextParam()
 
 			if !first {
@@ -82,8 +87,8 @@ func alternate(command string, placeholder string, params []string, overlap time
 				break
 			}
 
-			s := strings.Replace(command, placeholder, nextParam, 1)
-			nextCmd := cmd(s, cmdStdout, cmdStderr)
+			cmdStr := strings.Replace(command, placeholder, nextParam, 1)
+			nextCmd := cmd(cmdStr, cmdStdout, cmdStderr)
 			m.setCmd(nextParam, nextCmd)
 
 			log.Printf("Running command with parameter %q\n", nextParam)
@@ -95,7 +100,7 @@ func alternate(command string, placeholder string, params []string, overlap time
 			}
 
 			if first {
-				// There is no previous command to interrupt.
+				// There is no previous command to terminate.
 				m.rotate()
 				break
 			}
@@ -103,7 +108,7 @@ func alternate(command string, placeholder string, params []string, overlap time
 			if overlap == 0 {
 				finishRotation(m)
 			} else {
-				log.Printf("Waiting %v before sending interrupt to command with parameter %q\n",
+				log.Printf("Waiting %v before sending TERM signal to command with parameter %q\n",
 					overlap, m.currentParam())
 				go func() {
 					time.Sleep(overlap)
@@ -116,32 +121,42 @@ func alternate(command string, placeholder string, params []string, overlap time
 
 func finishRotation(m *manager) {
 	if m.nextCmd() == nil {
-		// The next command is not running. Cancel the rotation without interrupting the current
+		// The next command is not running. Cancel the rotation without terminating the current
 		// command.
 		return
 	}
 	if c := m.currentCmd(); c != nil {
 		currentParam := m.currentParam()
-		log.Printf("Sending interrupt to command with parameter %q\n", currentParam)
-		if err := interruptCmd(c); err != nil {
-			log.Printf("Failed to send interrupt to command with parameter %q, error: %v\n",
+		log.Printf("Sending TERM signal to command with parameter %q\n", currentParam)
+		if err := signalCmd(c, syscall.SIGTERM); err != nil {
+			log.Printf("Failed to send TERM signal to command with parameter %q, error: %v\n",
 				currentParam, err)
 		}
 	}
 	m.rotate()
 }
 
-// interruptCmd sends SIGINT to a command.
-func interruptCmd(c *exec.Cmd) error {
+// signalCmd sends a signal to a command.
+func signalCmd(c *exec.Cmd, s os.Signal) error {
 	if c == nil {
-		return errors.New("interruptCmd error: cmd is nil")
+		return errors.New("signalCmd error: cmd is nil")
 	}
 	p := c.Process
 	if p == nil {
-		return errors.New("interruptCmd error: cmd.Process is nil")
+		return errors.New("signalCmd error: cmd.Process is nil")
 	}
-	p.Signal(os.Interrupt)
+	p.Signal(s)
 	return nil
+}
+
+// signalAllCmds sends a signal to all commands in the manager.
+func signalAllCmds(params []string, m *manager, s os.Signal) {
+	for _, param := range params {
+		if c := m.cmd(param); c != nil {
+			log.Printf("Sending signal to command with parameter %q\n", param)
+			signalCmd(c, s)
+		}
+	}
 }
 
 // cmd returns a command built from the given string. The command will print to the given stdout and
@@ -165,16 +180,4 @@ func run(c *exec.Cmd, exitMsg string, exit chan string) error {
 		exit <- exitMsg
 	}()
 	return nil
-}
-
-// killAllCmds sends a SIGKILL to all commands in the manager.
-func killAllCmds(params []string, m *manager) {
-	for _, param := range params {
-		if c := m.cmd(param); c != nil {
-			if p := c.Process; p != nil {
-				log.Printf("Killing command with parameter %q\n", param)
-				p.Signal(os.Kill)
-			}
-		}
-	}
 }

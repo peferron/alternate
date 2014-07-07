@@ -6,6 +6,7 @@ import (
 	"os"
 	"os/signal"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/peferron/alternate/testbin"
@@ -27,7 +28,7 @@ func main() {
 	if err != nil {
 		panic(err)
 	}
-	exitAfterSigintDelay, err := time.ParseDuration(b[1])
+	exitAfterSigtermDelay, err := time.ParseDuration(b[1])
 	if err != nil {
 		panic(err)
 	}
@@ -40,7 +41,7 @@ func main() {
 
 	exit := make(chan struct{})
 	go exitAfterStart(exitAfterStartDelay, exit)
-	go exitAfterSigint(exitAfterSigintDelay, exit)
+	go exitAfterSigterm(exitAfterSigtermDelay, exit)
 
 	<-exit
 	logf("exit")
@@ -53,13 +54,13 @@ func exitAfterStart(delay time.Duration, exit chan struct{}) {
 	}
 }
 
-func exitAfterSigint(delay time.Duration, exit chan struct{}) {
-	sigint := make(chan os.Signal)
-	signal.Notify(sigint, os.Interrupt)
-	for _ = range sigint {
+func exitAfterSigterm(delay time.Duration, exit chan struct{}) {
+	term := make(chan os.Signal)
+	signal.Notify(term, syscall.SIGTERM, syscall.SIGINT)
+	for _ = range term {
 		if delay >= 0 {
 			time.Sleep(delay)
-			close(sigint)
+			close(term)
 		}
 	}
 	exit <- struct{}{}

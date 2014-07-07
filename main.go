@@ -13,7 +13,7 @@ const (
 
 - command: command to run, with ` + placeholder + ` used a a placeholder for the rotated parameters.
 - parameters: space-separated list of parameters to rotate through after receiving a USR1 signal.
-- overlap: delay between starting the next command and sending an interrupt signal (SIGINT, Ctrl-C) to the previous command.
+- overlap: delay between starting the next command and sending a TERM signal to the previous command.
 
 Example: alternate "/home/me/myserver 127.0.0.1:%alt" 3000 3001 15s
 

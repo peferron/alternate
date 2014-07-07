@@ -24,7 +24,7 @@ $ alternate <command> <parameters...> <overlap>
 
 - `command` is the command to run, with `%alt` acting as placeholder for the rotated parameters. 
 - `parameters...` is a space-separated list of parameters to rotate through after receiving a USR1 signal.
-- `overlap` is the delay between starting the next command, and sending an interrupt signal (SIGINT, Ctrl-C) to the previous command.
+- `overlap` is the delay between starting the next command, and sending a TERM signal to the previous command.
 
 ## Example
 
@@ -36,9 +36,9 @@ $ alternate "/home/me/myserver 127.0.0.1:%alt" 3000 3001 15s
 
 1. It picks the first parameter `3000` to execute the command `/home/me/myserver 127.0.0.1:3000`. Then it waits for a USR1 signal.
 2. When a USR1 signal is received, it picks the second parameter `3001` to execute the second command `/home/me/myserver 127.0.0.1:3001`. Then it waits 15 seconds.
-3. When the 15 seconds are over, if the command from step 2 is still running, it sends an interrupt signal (SIGINT, Ctrl-C) to the command from step 1. Then it waits for a USR1 signal.
+3. When the 15 seconds are over, if the command from step 2 is still running, it sends a TERM signal to the command from step 1. Then it waits for a USR1 signal.
 4. When a USR1 signal is received, it loops back to the first parameter `3000` to execute the command `/home/me/myserver 127.0.0.1:3000`. Then it waits 15 seconds.
-5. When the 15 seconds are over, if the command from step 4 is still running, it sends an interrupt signal to the command from step 3. Then it waits for another USR1 signal.
+5. When the 15 seconds are over, if the command from step 4 is still running, it sends a TERM signal to the command from step 3. Then it waits for another USR1 signal.
 6. And so on.
 
 ## Zero-downtime upgrade of a web server
@@ -68,7 +68,7 @@ Typical setup for running an API server (serving JSON for example) with zero-dow
     }
     ```
 
-2. Make sure your API server stops gracefully. Stopping gracefully means that when your API server receives an interrupt signal (SIGINT, Ctrl-C), it should close the listening socket, then finishing processing all active requests before exiting. Go servers can achieve this very easily using the [graceful](https://github.com/stretchr/graceful) package.
+2. Make sure your API server stops gracefully. Stopping gracefully means that when your API server receives a TERM signal, it should close the listening socket, then finishing processing all active requests before exiting. Go servers can achieve this very easily using the [graceful](https://github.com/stretchr/graceful) package.
 3. Start your API server by running this command:
 
     ```shell

@@ -21,8 +21,8 @@ const (
 )
 
 func init() {
-	fmt.Println("Initializing kill channel")
-	kill = make(chan struct{})
+	fmt.Println("Initializing testKill channel")
+	testKill = make(chan struct{})
 }
 
 func newNilWriter() *nilWriter {
@@ -175,7 +175,7 @@ func sendUsr1() {
 }
 
 func stop() {
-	kill <- struct{}{}
+	testKill <- struct{}{}
 	time.Sleep(one)
 }
 
