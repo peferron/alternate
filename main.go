@@ -15,7 +15,7 @@ const (
 - parameters: space-separated list of parameters to rotate through after receiving a USR1 signal.
 - overlap: delay between starting the next command and sending an interrupt signal (SIGINT, Ctrl-C) to the previous command.
 
-Example: alternate "/home/me/myserver 127.0.0.1:%alt" 3000 3001 10s
+Example: alternate "/home/me/myserver 127.0.0.1:%alt" 3000 3001 15s
 
 See https://github.com/peferron/alternate for more information.`
 )

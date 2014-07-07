@@ -28,17 +28,17 @@ $ alternate <command> <parameters...> <overlap>
 
 ## Example
 
-To run `/home/me/myserver` alternatively on ports 3000 and 3001, with 10 seconds of overlap:
+To run `/home/me/myserver` alternatively on ports 3000 and 3001, with 15 seconds of overlap:
 
 ```shell
-$ alternate "/home/me/myserver 127.0.0.1:%alt" 3000 3001 10s
+$ alternate "/home/me/myserver 127.0.0.1:%alt" 3000 3001 15s
 ```
 
 1. It picks the first parameter `3000` to execute the command `/home/me/myserver 127.0.0.1:3000`. Then it waits for a USR1 signal.
-2. When a USR1 signal is received, it picks the second parameter `3001` to execute the second command `/home/me/myserver 127.0.0.1:3001`. Then it waits 10 seconds.
-3. When the 10 seconds are over, if the command from step 2 is still running, it sends an interrupt signal (SIGINT, Ctrl-C) to the command from step 1. Then it waits for a USR1 signal.
-4. When a USR1 signal is received, it loops back to the first parameter `3000` to execute the command `/home/me/myserver 127.0.0.1:3000`. Then it waits 10 seconds.
-5. When the 10 seconds are over, if the command from step 4 is still running, it sends an interrupt signal to the command from step 3. Then it waits for another USR1 signal.
+2. When a USR1 signal is received, it picks the second parameter `3001` to execute the second command `/home/me/myserver 127.0.0.1:3001`. Then it waits 15 seconds.
+3. When the 15 seconds are over, if the command from step 2 is still running, it sends an interrupt signal (SIGINT, Ctrl-C) to the command from step 1. Then it waits for a USR1 signal.
+4. When a USR1 signal is received, it loops back to the first parameter `3000` to execute the command `/home/me/myserver 127.0.0.1:3000`. Then it waits 15 seconds.
+5. When the 15 seconds are over, if the command from step 4 is still running, it sends an interrupt signal to the command from step 3. Then it waits for another USR1 signal.
 6. And so on.
 
 ## Zero-downtime upgrade of a web server
@@ -72,7 +72,7 @@ Typical setup for running an API server (serving JSON for example) with zero-dow
 3. Start your API server by running this command:
 
     ```shell
-    $ alternate "/home/me/myserver 127.0.0.1:%alt" 3000 3001 10s
+    $ alternate "/home/me/myserver 127.0.0.1:%alt" 3000 3001 15s
     ```
 
     [supervisor](http://supervisord.org/) is a great tool to automatically start this command and automatically restart it after a crash.
@@ -84,4 +84,4 @@ Typical setup for running an API server (serving JSON for example) with zero-dow
     $ pkill -USR1 -f alternate
     ```
 
-7. **Done!** The old and new versions of your API server will run concurrently for 10s, then the new version will take over completely, all without a hitch. Next time you want to update to a newer version, simply repeat steps 5 and 6.
+7. **Done!** The old and new versions of your API server will run concurrently for 15s, then the new version will take over completely, all without a hitch. Next time you want to update to a newer version, simply repeat steps 5 and 6.
