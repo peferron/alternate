@@ -42,11 +42,16 @@ func alternate(command string, placeholder string, params []string, overlap time
 	// Then listen to USR1 signals dispatched by the user.
 	signal.Notify(next, syscall.SIGUSR1)
 
+	interrupt := make(chan os.Signal)
+	signal.Notify(interrupt, os.Interrupt)
+
 	m := newManager(params)
 
 	for {
 		select {
-		case <-testExit:
+		case <-interrupt:
+			log.Println("Intercepted interrupt signal, will exit after all commands have exited")
+
 		case <-kill:
 			log.Println("Test exit channel received a value, exiting alternate")
 			killAllCmds(params, m)
