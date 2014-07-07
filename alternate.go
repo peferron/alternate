@@ -12,9 +12,9 @@ import (
 	"time"
 )
 
-// testExit is a channel that is used during testing only to trigger a return from the alternate
-// function.
-var testExit chan struct{}
+// kill is a channel that is used during testing only to trigger a termination of all commands
+// and an immediate return from the alternate function.
+var kill chan struct{}
 
 // alternate runs a command with alternating parameters inserted in place of the placeholder. Each
 // time a SIGUSR1 is received, a new command is run with the next parameter, and a SIGINT is sent to
@@ -47,6 +47,7 @@ func alternate(command string, placeholder string, params []string, overlap time
 	for {
 		select {
 		case <-testExit:
+		case <-kill:
 			log.Println("Test exit channel received a value, exiting alternate")
 			killAllCmds(params, m)
 			return
