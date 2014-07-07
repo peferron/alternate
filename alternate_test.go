@@ -97,6 +97,7 @@ type test struct {
 	cmdStdout   *lineWriter
 	cmdStderr   *lineWriter
 	params      []string
+	exited      bool
 	expectIndex int
 }
 
@@ -163,10 +164,14 @@ func start(t *testing.T, params []string, overlap time.Duration) *test {
 		newLineWriter(false),
 		newLineWriter(false),
 		params,
+		false,
 		0,
 	}
 	c := testbin.Build() + " " + placeholder
-	go alternate(c, placeholder, params, overlap, newNilWriter(), test.cmdStdout, test.cmdStderr)
+	go func() {
+		alternate(c, placeholder, params, overlap, newNilWriter(), test.cmdStdout, test.cmdStderr)
+		test.exited = true
+	}()
 	return test
 }
 
@@ -174,7 +179,11 @@ func sendUsr1() {
 	process().Signal(syscall.SIGUSR1)
 }
 
-func stop() {
+func sendTerm() {
+	process().Signal(syscall.SIGTERM)
+}
+
+func kill() {
 	testKill <- struct{}{}
 	time.Sleep(one)
 }
@@ -285,7 +294,7 @@ func TestNoOverlapNoConflict(t *testing.T) {
 			"param1 " + b + " | exit",
 		})
 
-		stop()
+		kill()
 	}
 }
 
@@ -325,7 +334,7 @@ func TestOverlapNoConflict(t *testing.T) {
 			"param1 " + b + " | exit",
 		})
 
-		stop()
+		kill()
 	}
 }
 
@@ -355,7 +364,7 @@ func TestNoOverlapConflict(t *testing.T) {
 		sendUsr1()
 		test.expect(one, []string{})
 
-		stop()
+		kill()
 	}
 }
 
@@ -387,7 +396,7 @@ func TestOverlapConflict(t *testing.T) {
 		sendUsr1()
 		test.expect(three, []string{})
 
-		stop()
+		kill()
 	}
 }
 
@@ -426,7 +435,7 @@ func TestPrematureCmdExit(t *testing.T) {
 			"param0 " + a + " | exit",
 		})
 
-		stop()
+		kill()
 	}
 }
 
@@ -462,30 +471,57 @@ func TestCmdRunError(t *testing.T) {
 			"param0 " + a + " | exit",
 		})
 
-		stop()
+		kill()
 	}
 }
 
-func TestAlternateExit(t *testing.T) {
-	c := testbin.Build() + " " + placeholder
+func TestAllCmdsExit(t *testing.T) {
 	v := []string{"param0"}
 	o := zero
 
-	testbin.SetBehavior(two, zero, "a")
-
-	exited := false
-	go func() {
-		alternate(c, placeholder, v, o, newNilWriter(), newNilWriter(), newNilWriter())
-		exited = true
-	}()
-
-	time.Sleep(one)
-	if exited {
+	a := testbin.SetBehavior(two, zero, "a")
+	test := start(t, v, o)
+	test.expect(one, []string{
+		"param0 " + a + " | start",
+	})
+	if test.exited {
 		t.Error("Was expecting exited to be false, was true")
 	}
 
-	time.Sleep(two)
-	if !exited {
+	test.reset()
+	test.expect(two, []string{
+		"param0 " + a + " | exit",
+	})
+	if !test.exited {
+		t.Error("Was expecting exited to be true, was false")
+	}
+}
+
+func TestTermForwarding(t *testing.T) {
+	v := []string{"param0"}
+	o := zero
+
+	a := testbin.SetBehavior(-one, two, "a")
+	test := start(t, v, o)
+	test.expect(one, []string{
+		"param0 " + a + " | start",
+	})
+	if test.exited {
+		t.Error("Was expecting exited to be false, was true")
+	}
+
+	test.reset()
+	sendTerm()
+	test.expect(one, []string{})
+	if test.exited {
+		t.Error("Was expecting exited to be false, was true")
+	}
+
+	test.reset()
+	test.expect(two, []string{
+		"param0 " + a + " | exit",
+	})
+	if !test.exited {
 		t.Error("Was expecting exited to be true, was false")
 	}
 }
