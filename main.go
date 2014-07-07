@@ -9,7 +9,7 @@ import (
 
 const (
 	placeholder = "%alt"
-	usage       = `Usage: alternate <command> <parameters> <overlap>
+	usage       = `Usage: alternate <command> <parameters...> <overlap>
 
 - command: command to run, with ` + placeholder + ` used a a placeholder for the rotated parameters.
 - parameters: space-separated list of parameters to rotate through after receiving a USR1 signal.
