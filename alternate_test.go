@@ -84,12 +84,7 @@ func (w *lineWriter) reset() {
 func (w *lineWriter) getLines() []string {
 	w.mutex.Lock()
 	defer w.mutex.Unlock()
-
-	clone := make([]string, len(w.lines))
-	for i, s := range w.lines {
-		clone[i] = s
-	}
-	return clone
+	return clone(w.lines)
 }
 
 type test struct {
@@ -152,9 +147,7 @@ func sameStrings(a []string, b []string) bool {
 // clone returns a deep copy of a slice of strings.
 func clone(a []string) []string {
 	b := make([]string, len(a))
-	for i := range a {
-		b[i] = a[i]
-	}
+	copy(b, a)
 	return b
 }
 
