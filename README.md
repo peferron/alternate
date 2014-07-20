@@ -1,6 +1,6 @@
 # alternate [![Build Status](https://drone.io/github.com/peferron/alternate/status.png)](https://drone.io/github.com/peferron/alternate/latest) [![Coverage Status](https://coveralls.io/repos/peferron/alternate/badge.png?branch=master)](https://coveralls.io/r/peferron/alternate?branch=master)
 
-`alternate` is a simple CLI tool for running a server on alternating ports. Together with a reverse proxy like [nginx](http://nginx.org/), [Apache](https://httpd.apache.org/) or [HAProxy](http://www.haproxy.org/), it makes zero-downtime upgrade of web servers easy.
+`alternate` is a simple CLI tool for running a command with alternating parameters. Used together with a reverse proxy, it makes zero-downtime upgrade of web servers easy.
 
 ## Installation
 
@@ -10,7 +10,7 @@ With [Go](http://golang.org/) installed, and `GOPATH/bin` added to your `PATH`:
 $ go get github.com/peferron/alternate
 ```
 
-Then verify than `alternate` is installed:
+Then verify that `alternate` is installed:
 
 ```shell
 $ alternate
@@ -22,7 +22,7 @@ $ alternate
 $ alternate <command> <parameters...> <overlap>
 ```
 
-- `command` is the command to run, with `%alt` acting as placeholder for the rotated parameters. 
+- `command` is the command to run, with the substring `%alt` acting as placeholder for the rotated parameter. 
 - `parameters...` is a space-separated list of parameters to rotate through after receiving a USR1 signal.
 - `overlap` is the delay between starting the next command, and sending a TERM signal to the previous command.
 
@@ -34,22 +34,20 @@ To run `/home/me/myserver` alternatively on ports 3000 and 3001, with 15 seconds
 $ alternate "/home/me/myserver 127.0.0.1:%alt" 3000 3001 15s
 ```
 
-1. It picks the first parameter `3000` to execute the command `/home/me/myserver 127.0.0.1:3000`. Then it waits for a USR1 signal.
-2. When a USR1 signal is received, it picks the second parameter `3001` to execute the second command `/home/me/myserver 127.0.0.1:3001`. Then it waits 15 seconds.
-3. When the 15 seconds are over, if the command from step 2 is still running, it sends a TERM signal to the command from step 1. Then it waits for a USR1 signal.
-4. When a USR1 signal is received, it loops back to the first parameter `3000` to execute the command `/home/me/myserver 127.0.0.1:3000`. Then it waits 15 seconds.
-5. When the 15 seconds are over, if the command from step 4 is still running, it sends a TERM signal to the command from step 3. Then it waits for another USR1 signal.
+1. `alternate` picks the first parameter `3000` to execute the command `/home/me/myserver 127.0.0.1:3000`. Then `alternate` waits for a USR1 signal.
+2. When a USR1 signal is received, `alternate` picks the second parameter `3001` to execute the second command `/home/me/myserver 127.0.0.1:3001`. Then `alternate` waits 15 seconds.
+3. When the 15 seconds are over, if the command from step 2 is still running, `alternate` sends a TERM signal to the command from step 1. Then `alternate` waits for a USR1 signal.
+4. When a USR1 signal is received, `alternate` loops back to the first parameter `3000` to execute the command `/home/me/myserver 127.0.0.1:3000`. Then `alternate` waits 15 seconds.
+5. When the 15 seconds are over, if the command from step 4 is still running, `alternate` sends a TERM signal to the command from step 3. Then `alternate` waits for another USR1 signal.
 6. And so on.
 
-## Zero-downtime upgrade of a web server
+## Zero-downtime web server upgrade
 
-Although `alternate` can be used to run any command, it is primarily designed to make zero-downtime upgrade of web servers easy.
+Steps for running an API server (serving JSON for example) with zero-downtime upgrades:
 
-The setup presented below uses [nginx](http://nginx.org/) as a reverse proxy. Even if you don't use `alternate`, you should consider using a reverse proxy in front of your web server: it lets you configure static file serving, caching headers and so on very easily, without having to bake all this functionality into your web server. [Apache](https://httpd.apache.org/) and many others would do the job as well, but the setup below uses nginx.
+1. Install a reverse proxy, if you don't have one already. The cool thing with using a reverse proxy is that it also lets you configure static file serving, caching headers and so on very easily, without having to bake all this functionality into your API server. This setup uses [nginx](http://nginx.org/) as reverse proxy, but [Apache](https://httpd.apache.org/), [HAProxy](http://www.haproxy.org/) and many others would do the job as well.
 
-Typical setup for running an API server (serving JSON for example) with zero-downtime reloading:
-
-1. Edit your `nginx.conf` to run nginx as a reverse proxy to your API server:
+1. Edit `nginx.conf` to run nginx as a reverse proxy to your API server:
 
     ```shell
     upstream myserver {
@@ -84,4 +82,4 @@ Typical setup for running an API server (serving JSON for example) with zero-dow
     $ pkill -USR1 -f alternate
     ```
 
-7. **Done!** The old and new versions of your API server will run concurrently for 15s, then the new version will take over completely, all without a hitch. Next time you want to update to a newer version, simply repeat steps 5 and 6.
+7. **Done!** The old and new versions of your API server will run concurrently for 15s, then the new version will take over completely, all without a hitch. Next time you want to update to a newer version, simply repeat steps 6 and 7.
