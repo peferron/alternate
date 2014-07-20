@@ -47,41 +47,41 @@ func alternate(command string, placeholder string, params []string, overlap time
 	// and INT signal (termination signal sent when the user presses Ctrl-C in the terminal).
 	signal.Notify(term, syscall.SIGTERM, syscall.SIGINT)
 
-	m := newManager(params)
+	s := newState(params)
 
 	for {
 		select {
 		case <-testKill:
 			log.Println("testKill channel received a value, sending KILL signal to all commands " +
 				"and exiting alternate")
-			signalAllCmds(params, m, syscall.SIGKILL)
+			signalAllCmds(params, s, syscall.SIGKILL)
 			return
 
 		case <-term:
 			log.Println("Received TERM or INT signal, sending TERM signal to all commands, will " +
 				"exit after all commands have exited")
-			signalAllCmds(params, m, syscall.SIGTERM)
+			signalAllCmds(params, s, syscall.SIGTERM)
 
 		case param := <-cmdExit:
 			log.Printf("Command with parameter %q exited\n", param)
-			m.unsetCmd(param)
-			if !m.hasCmds() {
+			s.unsetCmd(param)
+			if !s.hasCmds() {
 				log.Println("All commands have exited, exiting alternate")
 				return
 			}
 
 		case <-overlapEnd:
-			finishRotation(m)
+			finishRotation(s)
 
-		case s := <-next:
-			first := s != syscall.SIGUSR1
-			nextParam := m.nextParam()
+		case sig := <-next:
+			first := sig != syscall.SIGUSR1
+			nextParam := s.nextParam()
 
 			if !first {
 				log.Printf("Received signal USR1, rotating to next parameter %q", nextParam)
 			}
 
-			if m.nextCmd() != nil {
+			if s.nextCmd() != nil {
 				log.Printf("A command with parameter %q is already running, cannot run again",
 					nextParam)
 				break
@@ -89,27 +89,27 @@ func alternate(command string, placeholder string, params []string, overlap time
 
 			cmdStr := strings.Replace(command, placeholder, nextParam, 1)
 			nextCmd := cmd(cmdStr, cmdStdout, cmdStderr)
-			m.setCmd(nextParam, nextCmd)
+			s.setCmd(nextParam, nextCmd)
 
 			log.Printf("Running command with parameter %q\n", nextParam)
 			if err := run(nextCmd, nextParam, cmdExit); err != nil {
 				log.Printf("Failed to run the command with parameter %q, error: %v\n",
 					err.Error())
-				m.unsetCmd(nextParam)
+				s.unsetCmd(nextParam)
 				break
 			}
 
 			if first {
 				// There is no previous command to terminate.
-				m.rotate()
+				s.rotate()
 				break
 			}
 
 			if overlap == 0 {
-				finishRotation(m)
+				finishRotation(s)
 			} else {
 				log.Printf("Waiting %v before sending TERM signal to command with parameter %q\n",
-					overlap, m.currentParam())
+					overlap, s.currentParam())
 				go func() {
 					time.Sleep(overlap)
 					overlapEnd <- struct{}{}
@@ -119,21 +119,21 @@ func alternate(command string, placeholder string, params []string, overlap time
 	}
 }
 
-func finishRotation(m *manager) {
-	if m.nextCmd() == nil {
+func finishRotation(s *state) {
+	if s.nextCmd() == nil {
 		// The next command is not running. Cancel the rotation without terminating the current
 		// command.
 		return
 	}
-	if c := m.currentCmd(); c != nil {
-		currentParam := m.currentParam()
+	if c := s.currentCmd(); c != nil {
+		currentParam := s.currentParam()
 		log.Printf("Sending TERM signal to command with parameter %q\n", currentParam)
 		if err := signalCmd(c, syscall.SIGTERM); err != nil {
 			log.Printf("Failed to send TERM signal to command with parameter %q, error: %v\n",
 				currentParam, err)
 		}
 	}
-	m.rotate()
+	s.rotate()
 }
 
 // signalCmd sends a signal to a command.
@@ -149,12 +149,12 @@ func signalCmd(c *exec.Cmd, s os.Signal) error {
 	return nil
 }
 
-// signalAllCmds sends a signal to all commands in the manager.
-func signalAllCmds(params []string, m *manager, s os.Signal) {
+// signalAllCmds sends a signal to all commands in the state.
+func signalAllCmds(params []string, s *state, sig os.Signal) {
 	for _, param := range params {
-		if c := m.cmd(param); c != nil {
+		if c := s.cmd(param); c != nil {
 			log.Printf("Sending signal to command with parameter %q\n", param)
-			signalCmd(c, s)
+			signalCmd(c, sig)
 		}
 	}
 }
