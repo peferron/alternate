@@ -35,10 +35,15 @@ $ alternate "/home/me/myserver 127.0.0.1:%alt" 3000 3001 15s
 ```
 
 1. `alternate` picks the first parameter `3000` to execute the command `/home/me/myserver 127.0.0.1:3000`. Then `alternate` waits for a USR1 signal.
+
 2. When a USR1 signal is received, `alternate` picks the second parameter `3001` to execute the second command `/home/me/myserver 127.0.0.1:3001`. Then `alternate` waits 15 seconds.
+
 3. When the 15 seconds are over, if the command from step 2 is still running, `alternate` sends a TERM signal to the command from step 1. Then `alternate` waits for a USR1 signal.
+
 4. When a USR1 signal is received, `alternate` loops back to the first parameter `3000` to execute the command `/home/me/myserver 127.0.0.1:3000`. Then `alternate` waits 15 seconds.
+
 5. When the 15 seconds are over, if the command from step 4 is still running, `alternate` sends a TERM signal to the command from step 3. Then `alternate` waits for another USR1 signal.
+
 6. And so on.
 
 ## Zero-downtime web server upgrade
@@ -47,7 +52,7 @@ Steps for running an API server (serving JSON for example) with zero-downtime up
 
 1. Install a reverse proxy, if you don't have one already. The cool thing with using a reverse proxy is that it also lets you configure static file serving, caching headers and so on very easily, without having to bake all this functionality into your API server. This setup uses [nginx](http://nginx.org/) as reverse proxy, but [Apache](https://httpd.apache.org/), [HAProxy](http://www.haproxy.org/) and many others would do the job as well.
 
-1. Edit `nginx.conf` to run nginx as a reverse proxy to your API server:
+2. Edit `nginx.conf` to run nginx as a reverse proxy to your API server:
 
     ```shell
     upstream myserver {
@@ -66,20 +71,24 @@ Steps for running an API server (serving JSON for example) with zero-downtime up
     }
     ```
 
-2. Make sure your API server stops gracefully. Stopping gracefully means that when your API server receives a TERM signal, it should close the listening socket, then finishing processing all active requests before exiting. Go servers can achieve this very easily using the [graceful](https://github.com/stretchr/graceful) package.
-3. Start your API server by running this command:
+3. Make sure your API server stops gracefully. Stopping gracefully means that when your API server receives a TERM signal, it should close the listening socket, then finishing processing all active requests before exiting. Go servers can achieve this very easily using the [graceful](https://github.com/stretchr/graceful) package.
+
+4. Start your API server by running this command:
 
     ```shell
     $ alternate "/home/me/myserver 127.0.0.1:%alt" 3000 3001 15s
     ```
 
     [supervisor](http://supervisord.org/) is a great tool to automatically start this command and automatically restart it after a crash.
-4. Work on your API server!
-5. Overwrite `/home/me/myserver` with the latest and greatest version of your API server.
-6. Send a USR1 signal to `alternate`:
+
+5. Work on your API server!
+
+6. Overwrite `/home/me/myserver` with the latest and greatest version of your API server.
+
+7. Send a USR1 signal to `alternate`:
 
     ```shell
     $ pkill -USR1 -f alternate
     ```
 
-7. **Done!** The old and new versions of your API server will run concurrently for 15s, then the new version will take over completely, all without a hitch. Next time you want to update to a newer version, simply repeat steps 6 and 7.
+8. **Done!** The old and new versions of your API server will run concurrently for 15s, then the new version will take over completely, all without a hitch. Next time you want to update to a newer version, simply repeat steps 6 and 7.
