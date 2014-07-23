@@ -3,7 +3,7 @@ package main
 import "log"
 
 func newRotation(s []string) *rotation {
-	return &rotation{-1, s}
+	return &rotation{0, s}
 }
 
 type rotation struct {

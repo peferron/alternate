@@ -10,26 +10,22 @@ func newState(params []string) *state {
 }
 
 type state struct {
-	r    *rotation
-	cmds map[string]*exec.Cmd
+	rotation *rotation
+	cmds     map[string]*exec.Cmd
 }
+
+type eachFunc func(p string, c *exec.Cmd)
 
 // Functions that keep the state unchanged.
 
-func (s *state) currentParam() string {
-	return s.r.current()
+func (s *state) current() (string, *exec.Cmd) {
+	p := s.rotation.current()
+	return p, s.cmd(p)
 }
 
-func (s *state) nextParam() string {
-	return s.r.next()
-}
-
-func (s *state) currentCmd() *exec.Cmd {
-	return s.cmd(s.r.current())
-}
-
-func (s *state) nextCmd() *exec.Cmd {
-	return s.cmd(s.r.next())
+func (s *state) next() (string, *exec.Cmd) {
+	p := s.rotation.next()
+	return p, s.cmd(p)
 }
 
 func (s *state) cmd(param string) *exec.Cmd {
@@ -39,18 +35,26 @@ func (s *state) cmd(param string) *exec.Cmd {
 	return nil
 }
 
-func (s *state) hasCmds() bool {
-	return len(s.cmds) > 0
+func (s *state) empty() bool {
+	return len(s.cmds) == 0
 }
 
-func (s *state) rotate() {
-	s.r.rotate()
+func (s *state) each(f eachFunc) {
+	for p, c := range s.cmds {
+		f(p, c)
+	}
 }
 
-func (s *state) setCmd(param string, cmd *exec.Cmd) {
+// Functions that change the state.
+
+func (s *state) set(param string, cmd *exec.Cmd) {
 	s.cmds[param] = cmd
 }
 
-func (s *state) unsetCmd(param string) {
+func (s *state) unset(param string) {
 	delete(s.cmds, param)
+}
+
+func (s *state) rotate() {
+	s.rotation.rotate()
 }
