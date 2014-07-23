@@ -1,45 +1,35 @@
 package main
 
-import (
-	"log"
-	"os/exec"
-)
+import "os/exec"
 
 func newState(params []string) *state {
 	return &state{
-		-1,
+		newRotation(params),
 		map[string]*exec.Cmd{},
-		params,
 	}
 }
 
 type state struct {
-	i      int
-	cmds   map[string]*exec.Cmd
-	params []string
+	r    *rotation
+	cmds map[string]*exec.Cmd
 }
 
-//
 // Functions that keep the state unchanged.
-//
 
 func (s *state) currentParam() string {
-	if s.i < 0 {
-		log.Fatalf("Cannot call state.currentParam when state.i is %d", s.i)
-	}
-	return s.params[s.i%len(s.params)]
+	return s.r.current()
 }
 
 func (s *state) nextParam() string {
-	return s.params[(s.i+1)%len(s.params)]
+	return s.r.next()
 }
 
 func (s *state) currentCmd() *exec.Cmd {
-	return s.cmd(s.currentParam())
+	return s.cmd(s.r.current())
 }
 
 func (s *state) nextCmd() *exec.Cmd {
-	return s.cmd(s.nextParam())
+	return s.cmd(s.r.next())
 }
 
 func (s *state) cmd(param string) *exec.Cmd {
@@ -53,12 +43,8 @@ func (s *state) hasCmds() bool {
 	return len(s.cmds) > 0
 }
 
-//
-// Functions that change the state.
-//
-
 func (s *state) rotate() {
-	s.i++
+	s.r.rotate()
 }
 
 func (s *state) setCmd(param string, cmd *exec.Cmd) {
