@@ -6,7 +6,7 @@ import (
 	"time"
 )
 
-func TestArgs(t *testing.T) {
+func TestParseArguments(t *testing.T) {
 	tests := []struct {
 		iOsArgs []string
 		oA      arguments
@@ -55,7 +55,7 @@ func TestArgs(t *testing.T) {
 	}
 
 	for i, test := range tests {
-		a, err := args(test.iOsArgs)
+		a, err := parseArguments(test.iOsArgs)
 		if !sameError(err, test.oErr) {
 			t.Errorf("For test #%d with osArgs %v, expected err to be '%s', but was '%s'",
 				i, test.iOsArgs, test.oErr, err)

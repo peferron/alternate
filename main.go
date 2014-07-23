@@ -27,7 +27,7 @@ type arguments struct {
 }
 
 func main() {
-	a, err := args(os.Args)
+	a, err := parseArguments(os.Args)
 	if err != nil {
 		fmt.Printf("%v\n\n%s\n", err, usage)
 		os.Exit(1)
@@ -36,8 +36,7 @@ func main() {
 	alternate(a.command, placeholder, a.params, a.overlap, os.Stderr, os.Stdout, os.Stderr)
 }
 
-// args parses the command-line arguments.
-func args(osArgs []string) (arguments, error) {
+func parseArguments(osArgs []string) (arguments, error) {
 	l := len(osArgs)
 
 	if l < 4 {
