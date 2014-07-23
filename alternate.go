@@ -36,15 +36,15 @@ func alternate(command string, placeholder string, params []string, overlap time
 	// When the overlap duration has elapsed, overlapEnd receives an empty struct.
 	overlapEnd := make(chan struct{})
 
+	// Listen to USR1 signals dispatched by the user, with a fake signal buffered to run the first
+	// command.
 	next := make(chan os.Signal, 1)
-	// Buffer a fake signal to run the first command.
 	next <- syscall.Signal(0)
-	// Then listen to USR1 signals dispatched by the user.
 	signal.Notify(next, syscall.SIGUSR1)
 
-	term := make(chan os.Signal)
 	// Listen to both TERM signal (termination signal sent programmatically by e.g. supervisord)
 	// and INT signal (termination signal sent when the user presses Ctrl-C in the terminal).
+	term := make(chan os.Signal)
 	signal.Notify(term, syscall.SIGTERM, syscall.SIGINT)
 
 	s := newState(params)
