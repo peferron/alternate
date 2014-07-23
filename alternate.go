@@ -39,7 +39,7 @@ func alternate(command string, placeholder string, params []string, overlap time
 	// Listen to USR1 signals dispatched by the user, with a fake signal buffered to run the first
 	// command.
 	next := make(chan os.Signal, 1)
-	next <- syscall.Signal(0)
+	next <- syscall.SIGUSR1
 	signal.Notify(next, syscall.SIGUSR1)
 
 	// Listen to both TERM signal (termination signal sent programmatically by e.g. supervisord)
@@ -73,8 +73,8 @@ func alternate(command string, placeholder string, params []string, overlap time
 		case <-overlapEnd:
 			finishRotation(s)
 
-		case sig := <-next:
-			first := sig != syscall.SIGUSR1
+		case <-next:
+			first := !s.hasCmds()
 			nextParam := s.nextParam()
 
 			if !first {
