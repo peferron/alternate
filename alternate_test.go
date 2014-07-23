@@ -18,6 +18,8 @@ const (
 	one                 = 50 * time.Millisecond
 	two                 = 2 * one
 	three               = 3 * one
+	four                = 4 * one
+	five                = 5 * one
 )
 
 func init() {
@@ -151,7 +153,7 @@ func clone(a []string) []string {
 	return b
 }
 
-func start(t *testing.T, params []string, overlap time.Duration) *test {
+func newTest(t *testing.T, params []string, overlap time.Duration) *test {
 	test := &test{
 		t,
 		newLineWriter(false),
@@ -266,7 +268,7 @@ func TestNoOverlapNoConflict(t *testing.T) {
 
 	for _, v := range paramSets {
 		a := testbin.SetBehavior(-one, zero, "a")
-		test := start(t, v, o)
+		test := newTest(t, v, o)
 		test.expect(one, []string{
 			"param0 " + a + " | start",
 		})
@@ -300,7 +302,7 @@ func TestOverlapNoConflict(t *testing.T) {
 
 	for _, v := range paramSets {
 		a := testbin.SetBehavior(-one, zero, "a")
-		test := start(t, v, o)
+		test := newTest(t, v, o)
 		test.expect(one, []string{
 			"param0 " + a + " | start",
 		})
@@ -340,7 +342,7 @@ func TestNoOverlapConflict(t *testing.T) {
 
 	for _, v := range paramSets {
 		a := testbin.SetBehavior(-one, -one, "a")
-		test := start(t, v, o)
+		test := newTest(t, v, o)
 		test.expect(one, []string{
 			"param0 " + a + " | start",
 		})
@@ -370,7 +372,7 @@ func TestOverlapConflict(t *testing.T) {
 
 	for _, v := range paramSets {
 		a := testbin.SetBehavior(-one, -one, "a")
-		test := start(t, v, o)
+		test := newTest(t, v, o)
 		test.expect(one, []string{
 			"param0 " + a + " | start",
 		})
@@ -393,7 +395,47 @@ func TestOverlapConflict(t *testing.T) {
 	}
 }
 
-func TestPrematureCmdExit(t *testing.T) {
+func TestPrematureCurrentCmdExit(t *testing.T) {
+	paramSets := [][]string{
+		{"param0", "param1", "param2"},
+	}
+	o := five
+
+	for _, v := range paramSets {
+		a := testbin.SetBehavior(three, zero, "a")
+		test := newTest(t, v, o)
+		test.expect(one, []string{
+			"param0 " + a + " | start",
+		})
+
+		b := testbin.SetBehavior(-one, zero, "b")
+		test.reset()
+		sendUsr1()
+		test.expect(one, []string{
+			"param1 " + b + " | start",
+		})
+		test.reset()
+		test.expect(two, []string{
+			"param0 " + a + " | exit",
+		})
+
+		testbin.SetBehavior(-one, zero, "c")
+		test.reset()
+		sendUsr1()
+		test.expect(two, []string{})
+
+		d := testbin.SetBehavior(-one, zero, "d")
+		test.reset()
+		sendUsr1()
+		test.expect(one, []string{
+			"param2 " + d + " | start",
+		})
+
+		kill()
+	}
+}
+
+func TestPrematureNextCmdExit(t *testing.T) {
 	paramSets := [][]string{
 		{"param0", "param1"},
 		{"param0", "param1", "param0"},
@@ -402,7 +444,7 @@ func TestPrematureCmdExit(t *testing.T) {
 
 	for _, v := range paramSets {
 		a := testbin.SetBehavior(-one, zero, "a")
-		test := start(t, v, o)
+		test := newTest(t, v, o)
 		test.expect(one, []string{
 			"param0 " + a + " | start",
 		})
@@ -441,7 +483,7 @@ func TestCmdRunError(t *testing.T) {
 
 	for _, v := range paramSets {
 		a := testbin.SetBehavior(-one, zero, "a")
-		test := start(t, v, o)
+		test := newTest(t, v, o)
 		test.expect(one, []string{
 			"param0 " + a + " | start",
 		})
@@ -473,7 +515,7 @@ func TestAllCmdsExit(t *testing.T) {
 	o := zero
 
 	a := testbin.SetBehavior(two, zero, "a")
-	test := start(t, v, o)
+	test := newTest(t, v, o)
 	test.expect(one, []string{
 		"param0 " + a + " | start",
 	})
@@ -495,7 +537,7 @@ func TestTermForwarding(t *testing.T) {
 	o := zero
 
 	a := testbin.SetBehavior(-one, two, "a")
-	test := start(t, v, o)
+	test := newTest(t, v, o)
 	test.expect(one, []string{
 		"param0 " + a + " | start",
 	})
