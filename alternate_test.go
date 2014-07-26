@@ -154,6 +154,12 @@ func clone(a []string) []string {
 }
 
 func newTest(t *testing.T, params []string, overlap time.Duration) *test {
+	command := testbin.Build() + " " + placeholder
+	return newTestWithCommand(t, params, overlap, command)
+}
+
+func newTestWithCommand(t *testing.T, params []string, overlap time.Duration,
+	command string) *test {
 	test := &test{
 		t,
 		newLineWriter(false),
@@ -162,9 +168,9 @@ func newTest(t *testing.T, params []string, overlap time.Duration) *test {
 		false,
 		0,
 	}
-	c := testbin.Build() + " " + placeholder
 	go func() {
-		alternate(c, placeholder, params, overlap, newNilWriter(), test.cmdStdout, test.cmdStderr)
+		alternate(command, placeholder, params, overlap, newNilWriter(), test.cmdStdout,
+			test.cmdStderr)
 		test.exited = true
 	}()
 	return test
@@ -507,6 +513,17 @@ func TestCmdRunError(t *testing.T) {
 		})
 
 		kill()
+	}
+}
+
+func TestFirstCmdRunError(t *testing.T) {
+	v := []string{"param0"}
+	o := zero
+	command := testbin.Build() + "_fake " + placeholder
+	test := newTestWithCommand(t, v, o, command)
+	test.expect(one, []string{})
+	if !test.exited {
+		t.Error("Was expecting exited to be true, was false")
 	}
 }
 
