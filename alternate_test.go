@@ -266,15 +266,15 @@ func TestLineWriter(t *testing.T) {
 }
 
 func TestNoOverlapNoConflict(t *testing.T) {
-	paramSets := [][]string{
+	paramsList := [][]string{
 		{"param0", "param1"},
 		{"param0", "param1", "param0"},
 	}
-	o := zero
+	overlap := zero
 
-	for _, v := range paramSets {
+	for _, params := range paramsList {
 		a := testbin.SetBehavior(-one, zero, "a")
-		test := newTest(t, v, o)
+		test := newTest(t, params, overlap)
 		test.expect(one, []string{
 			"param0 " + a + " | start",
 		})
@@ -300,15 +300,15 @@ func TestNoOverlapNoConflict(t *testing.T) {
 }
 
 func TestOverlapNoConflict(t *testing.T) {
-	paramSets := [][]string{
+	paramsList := [][]string{
 		{"param0", "param1"},
 		{"param0", "param1", "param0"},
 	}
-	o := two
+	overlap := two
 
-	for _, v := range paramSets {
+	for _, params := range paramsList {
 		a := testbin.SetBehavior(-one, zero, "a")
-		test := newTest(t, v, o)
+		test := newTest(t, params, overlap)
 		test.expect(one, []string{
 			"param0 " + a + " | start",
 		})
@@ -340,15 +340,15 @@ func TestOverlapNoConflict(t *testing.T) {
 }
 
 func TestNoOverlapConflict(t *testing.T) {
-	paramSets := [][]string{
+	paramsList := [][]string{
 		{"param0", "param1"},
 		{"param0", "param1", "param0"},
 	}
-	o := zero
+	overlap := zero
 
-	for _, v := range paramSets {
+	for _, params := range paramsList {
 		a := testbin.SetBehavior(-one, -one, "a")
-		test := newTest(t, v, o)
+		test := newTest(t, params, overlap)
 		test.expect(one, []string{
 			"param0 " + a + " | start",
 		})
@@ -370,15 +370,15 @@ func TestNoOverlapConflict(t *testing.T) {
 }
 
 func TestOverlapConflict(t *testing.T) {
-	paramSets := [][]string{
+	paramsList := [][]string{
 		{"param0", "param1"},
 		{"param0", "param1", "param0"},
 	}
-	o := two
+	overlap := two
 
-	for _, v := range paramSets {
+	for _, params := range paramsList {
 		a := testbin.SetBehavior(-one, -one, "a")
-		test := newTest(t, v, o)
+		test := newTest(t, params, overlap)
 		test.expect(one, []string{
 			"param0 " + a + " | start",
 		})
@@ -402,14 +402,14 @@ func TestOverlapConflict(t *testing.T) {
 }
 
 func TestPrematureCurrentCmdExit(t *testing.T) {
-	paramSets := [][]string{
+	paramsList := [][]string{
 		{"param0", "param1", "param2"},
 	}
-	o := five
+	overlap := five
 
-	for _, v := range paramSets {
+	for _, params := range paramsList {
 		a := testbin.SetBehavior(three, zero, "a")
-		test := newTest(t, v, o)
+		test := newTest(t, params, overlap)
 		test.expect(one, []string{
 			"param0 " + a + " | start",
 		})
@@ -442,15 +442,15 @@ func TestPrematureCurrentCmdExit(t *testing.T) {
 }
 
 func TestPrematureNextCmdExit(t *testing.T) {
-	paramSets := [][]string{
+	paramsList := [][]string{
 		{"param0", "param1"},
 		{"param0", "param1", "param0"},
 	}
-	o := two
+	overlap := two
 
-	for _, v := range paramSets {
+	for _, params := range paramsList {
 		a := testbin.SetBehavior(-one, zero, "a")
-		test := newTest(t, v, o)
+		test := newTest(t, params, overlap)
 		test.expect(one, []string{
 			"param0 " + a + " | start",
 		})
@@ -481,15 +481,15 @@ func TestPrematureNextCmdExit(t *testing.T) {
 }
 
 func TestCmdRunError(t *testing.T) {
-	paramSets := [][]string{
+	paramsList := [][]string{
 		{"param0", "param1"},
 		{"param0", "param1", "param0"},
 	}
-	o := zero
+	overlap := zero
 
-	for _, v := range paramSets {
+	for _, params := range paramsList {
 		a := testbin.SetBehavior(-one, zero, "a")
-		test := newTest(t, v, o)
+		test := newTest(t, params, overlap)
 		test.expect(one, []string{
 			"param0 " + a + " | start",
 		})
@@ -517,10 +517,11 @@ func TestCmdRunError(t *testing.T) {
 }
 
 func TestFirstCmdRunError(t *testing.T) {
-	v := []string{"param0"}
-	o := zero
+	params := []string{"param0"}
+	overlap := zero
+
 	command := testbin.Build() + "_fake " + placeholder
-	test := newTestWithCommand(t, v, o, command)
+	test := newTestWithCommand(t, params, overlap, command)
 	test.expect(one, []string{})
 	if !test.exited {
 		t.Error("Was expecting exited to be true, was false")
@@ -528,11 +529,11 @@ func TestFirstCmdRunError(t *testing.T) {
 }
 
 func TestAllCmdsExit(t *testing.T) {
-	v := []string{"param0"}
-	o := zero
+	params := []string{"param0"}
+	overlap := zero
 
 	a := testbin.SetBehavior(two, zero, "a")
-	test := newTest(t, v, o)
+	test := newTest(t, params, overlap)
 	test.expect(one, []string{
 		"param0 " + a + " | start",
 	})
@@ -550,11 +551,11 @@ func TestAllCmdsExit(t *testing.T) {
 }
 
 func TestTermForwarding(t *testing.T) {
-	v := []string{"param0"}
-	o := zero
+	params := []string{"param0"}
+	overlap := zero
 
 	a := testbin.SetBehavior(-one, two, "a")
-	test := newTest(t, v, o)
+	test := newTest(t, params, overlap)
 	test.expect(one, []string{
 		"param0 " + a + " | start",
 	})
