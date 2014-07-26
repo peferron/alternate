@@ -520,6 +520,7 @@ func TestFirstCmdRunError(t *testing.T) {
 	params := []string{"param0"}
 	overlap := zero
 
+	testbin.SetBehavior(-one, zero, "a")
 	command := testbin.Build() + "_fake " + placeholder
 	test := newTestWithCommand(t, params, overlap, command)
 	test.expect(one, []string{})
