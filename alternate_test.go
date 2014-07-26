@@ -422,7 +422,7 @@ func TestPrematureCurrentCmdExit(t *testing.T) {
 		testbin.SetBehavior(-one, zero, "c")
 		test.reset()
 		sendUsr1()
-		test.expect(two, []string{})
+		test.expect(three, []string{})
 
 		d := testbin.SetBehavior(-one, zero, "d")
 		test.reset()
