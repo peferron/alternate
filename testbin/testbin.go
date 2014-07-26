@@ -38,13 +38,10 @@ func Build() string {
 		if err != nil {
 			panic(err)
 		}
-		p := path.Join(dir, "testbin")
-		build(p)
-		buildPath = p
-	} else {
-		build(buildPath)
+		buildPath = path.Join(dir, "testbin")
 	}
 
+	build(buildPath)
 	built = true
 	return buildPath
 }
