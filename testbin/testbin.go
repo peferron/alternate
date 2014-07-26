@@ -2,6 +2,7 @@ package testbin
 
 import (
 	"fmt"
+	"io/ioutil"
 	"os"
 	"os/exec"
 	"path"
@@ -33,7 +34,10 @@ func Build() string {
 	}
 
 	if buildPath == "" {
-		dir := os.TempDir()
+		dir, err := ioutil.TempDir("", "testbin_")
+		if err != nil {
+			panic(err)
+		}
 		p := path.Join(dir, "testbin")
 		build(p)
 		buildPath = p
