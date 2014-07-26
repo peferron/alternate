@@ -27,21 +27,18 @@ func alternate(command, placeholder string, params []string, overlap time.Durati
 	cmdStdout, cmdStderr io.Writer) {
 
 	setupLog(stderr)
-
 	log.Printf("Starting with command %q, placeholder %q, params = %q, overlap = %v\n",
 		command, placeholder, params, overlap)
 
-	// Listen to:
-	// - TERM signal (termination signal sent programmatically by e.g. supervisord);
-	// - INT signal (termination signal sent when the user presses Ctrl-C in the terminal).
 	terminate := make(chan os.Signal)
+	cmdExit := make(chan string)
+	overlapEnd := make(chan struct{})
+	rotate := make(chan os.Signal)
+
+	// Listen to TERM signal (termination signal sent programmatically by e.g. supervisord) and
+	// INT signal (termination signal sent when the user presses Ctrl-C in the terminal).
 	signal.Notify(terminate, syscall.SIGTERM, syscall.SIGINT)
 
-	cmdExit := make(chan string)
-
-	overlapEnd := make(chan struct{})
-
-	rotate := make(chan os.Signal)
 	signal.Notify(rotate, syscall.SIGUSR1)
 
 	// Convenience closure for easily running a command with a given parameter.
@@ -54,12 +51,14 @@ func alternate(command, placeholder string, params []string, overlap time.Durati
 
 	s := newState(params)
 
+	// Run the first command.
 	currentParam, _ := s.current()
 	if err := run(s, currentParam, runFunc); err != nil {
 		log.Println(err.Error())
 		return
 	}
 
+	// Event loop.
 	for {
 		select {
 		case <-testKill:
