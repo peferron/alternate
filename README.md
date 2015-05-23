@@ -1,4 +1,4 @@
-# alternate [![Build Status](https://drone.io/github.com/peferron/alternate/status.png)](https://drone.io/github.com/peferron/alternate/latest) [![Coverage Status](https://coveralls.io/repos/peferron/alternate/badge.png?branch=master)](https://coveralls.io/r/peferron/alternate?branch=master)
+# alternate [![Build Status](https://travis-ci.org/peferron/alternate.svg)](https://travis-ci.org/peferron/alternate) [![Coverage Status](https://coveralls.io/repos/peferron/alternate/badge.png?branch=master)](https://coveralls.io/r/peferron/alternate?branch=master)
 
 `alternate` is a simple CLI tool for running a command with alternating parameters. Used together with a reverse proxy, it makes zero-downtime upgrade of web servers easy.
 
