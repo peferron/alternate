@@ -1,5 +1,7 @@
 # alternate [![Build Status](https://travis-ci.org/peferron/alternate.svg)](https://travis-ci.org/peferron/alternate) [![Coverage Status](https://coveralls.io/repos/peferron/alternate/badge.svg?branch=master)](https://coveralls.io/r/peferron/alternate?branch=master)
 
+### :bangbang: This project is no longer maintained. There are better ways to gracefully upgrade Go HTTP servers nowadays.
+
 `alternate` is a simple CLI tool for running a command with alternating parameters. Used together with a reverse proxy, it makes zero-downtime upgrade of web servers easy.
 
 ## Installation
